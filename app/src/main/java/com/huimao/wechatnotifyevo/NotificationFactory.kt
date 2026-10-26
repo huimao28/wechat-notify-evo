@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Person
 import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
@@ -79,6 +80,21 @@ object NotificationFactory {
     private fun smallIcon(context: Context, conv: Conversation): Icon =
         conv.smallIcon ?: Icon.createWithResource(context, R.drawable.ic_stat_message)
 
+    /**
+     * Sender identity for MessagingStyle messages (Android 9+). Direct chats
+     * and service accounts reuse the chat avatar as the sender avatar; group
+     * senders have no per-sender avatar from WeChat, so they get none.
+     */
+    private fun messagePerson(conv: Conversation, sender: String): Person {
+        val builder = Person.Builder()
+            .setName(sender)
+            .setKey("sender_${conv.nid}_$sender")
+        if (conv.type != ConversationType.GROUP) {
+            conv.largeIcon?.let { builder.setIcon(it) }
+        }
+        return builder.build()
+    }
+
     private fun wechatLaunchIntent(context: Context): PendingIntent? {
         val launch = context.packageManager
             .getLaunchIntentForPackage(WeChatListenerService.WECHAT_PACKAGE) ?: return null
@@ -106,7 +122,14 @@ object NotificationFactory {
     ): Notification {
         val style = Notification.MessagingStyle(context.getString(R.string.self_display_name))
         for (msg in conv.messages.takeLast(20)) {
-            style.addMessage(msg.text, msg.timestamp, msg.sender)
+            if (msg.sender != null &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+            ) {
+                style.addMessage(msg.text, msg.timestamp, messagePerson(conv, msg.sender))
+            } else {
+                // Self messages (null sender) and pre-9 devices: plain text sender.
+                style.addMessage(msg.text, msg.timestamp, msg.sender)
+            }
         }
         if (conv.type == ConversationType.GROUP) {
             style.conversationTitle = conv.title
@@ -126,6 +149,11 @@ object NotificationFactory {
             .setGroup(groupKeyFor(conv.type))
             .setStyle(style)
             .setOnlyAlertOnce(silent)
+        // Android 11+: link the notification to its conversation shortcut so
+        // the system offers per-conversation priority/silent settings.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setShortcutId(ConversationShortcuts.shortcutId(conv.nid))
+        }
         conv.largeIcon?.let { builder.setLargeIcon(it) }
         val unread = if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size
         if (unread > 0) builder.setNumber(unread)

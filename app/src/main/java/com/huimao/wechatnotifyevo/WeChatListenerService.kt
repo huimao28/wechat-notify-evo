@@ -26,6 +26,7 @@ class WeChatListenerService : NotificationListenerService() {
         /** (Re)post one conversation's evolved notification and refresh summaries. */
         fun repostConversation(context: Context, conv: Conversation, silent: Boolean) {
             val nm = notificationManager(context) ?: return
+            ConversationShortcuts.publish(context, conv)
             nm.notify(
                 conv.nid,
                 NotificationFactory.buildConversationNotification(context, conv, silent)
@@ -37,6 +38,7 @@ class WeChatListenerService : NotificationListenerService() {
         fun cancelEvolved(context: Context, nid: Int) {
             val nm = notificationManager(context) ?: return
             nm.cancel(nid)
+            ConversationShortcuts.remove(context, nid)
             refreshSummaries(context)
         }
 
@@ -56,9 +58,11 @@ class WeChatListenerService : NotificationListenerService() {
         /** Cancel every evolved notification and drop all archives. */
         fun cancelAll(context: Context) {
             val nm = notificationManager(context) ?: return
-            for (conv in ConversationStore.all()) {
+            val convs = ConversationStore.all()
+            for (conv in convs) {
                 nm.cancel(conv.nid)
             }
+            ConversationShortcuts.removeAll(context, convs)
             for (type in ConversationType.values()) {
                 nm.cancel(NotificationFactory.summaryIdFor(type))
             }
@@ -161,9 +165,12 @@ class WeChatListenerService : NotificationListenerService() {
             while (conv.messages.size > 20) conv.messages.removeAt(0)
         }
 
-        // Replace the original with the evolved notification.
+        // Replace the original with the evolved notification. Publish the
+        // conversation shortcut first so the system links this notification
+        // to it (Android 11+ conversation status).
         cancelNotification(sbn.key)
         val nm = notificationManager(this) ?: return
+        ConversationShortcuts.publish(this, conv)
         nm.notify(
             conv.nid,
             NotificationFactory.buildConversationNotification(this, conv, silent = false)
@@ -184,6 +191,7 @@ class WeChatListenerService : NotificationListenerService() {
         // otherwise dismissed): drop our evolved copy too.
         val conv = ConversationStore.get(sbn.id) ?: return
         ConversationStore.remove(sbn.id)
+        ConversationShortcuts.remove(this, sbn.id)
         val nm = notificationManager(this) ?: return
         nm.cancel(conv.nid)
         refreshSummaries(this)

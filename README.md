@@ -25,6 +25,9 @@
 ## 功能
 
 - 多消息会话：同一会话的多条消息聚合为 MessagingStyle 对话。
+- 会话优先级（Android 11+）：进化版通知以系统会话发布（长驻快捷
+  方式 + Person），长按通知或在系统设置里可按会话调优先 / 默认 /
+  静音；气泡暂不做。
 - 直接回复：通知上的“回复”按钮把输入转发给微信原生的回复入口
   （car-extender reply PendingIntent）。
 - 标为已读：有 read PendingIntent 时提供该动作，点后通知微信已读并

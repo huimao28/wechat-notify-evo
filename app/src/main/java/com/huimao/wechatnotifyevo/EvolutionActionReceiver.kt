@@ -86,6 +86,7 @@ class EvolutionActionReceiver : BroadcastReceiver() {
 
     private fun handleDelete(context: Context, nid: Int) {
         ConversationStore.remove(nid)
+        ConversationShortcuts.remove(context, nid)
         WeChatListenerService.refreshSummaries(context)
     }
 }
