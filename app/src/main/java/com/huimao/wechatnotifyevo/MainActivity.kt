@@ -187,9 +187,11 @@ private fun SwitchRow(
 }
 
 private fun isListenerGranted(context: Context): Boolean {
+    // Settings.Secure.ENABLED_NOTIFICATION_LISTENERS is @hide, not in the
+    // public SDK, so use the literal setting key.
     val flat = Settings.Secure.getString(
         context.contentResolver,
-        Settings.Secure.ENABLED_NOTIFICATION_LISTENERS
+        "enabled_notification_listeners"
     ) ?: return false
     val component = ComponentName(context, WeChatListenerService::class.java).flattenToString()
     return flat.split(":").any { it == component }

@@ -90,7 +90,7 @@ class WeChatListenerService : NotificationListenerService() {
 
         // Decide the conversation type before touching the store, so that a
         // group message we are configured to ignore never pollutes the archive.
-        val (_, textNoCounter) = stripCounter(rawText)
+        val (textNoCounter, _) = stripCounter(rawText)
         val (senderPrefix, _) = splitSender(textNoCounter)
         val isGroupCandidate = senderPrefix != null && senderPrefix != title &&
             !isBotTitle(title)
@@ -144,7 +144,7 @@ class WeChatListenerService : NotificationListenerService() {
 
         if (!usedCarExtMessages) {
             // Fall back to parsing this notification's own text.
-            val (counter, text) = stripCounter(rawText)
+            val (text, counter) = stripCounter(rawText)
             val (sender, body) = splitSender(text)
             val messageSender = when (conv.type) {
                 ConversationType.GROUP -> sender
