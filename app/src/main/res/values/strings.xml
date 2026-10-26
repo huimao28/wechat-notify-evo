@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">微信通知进化</string>
+    <string name="service_name">微信通知监听</string>
+    <string name="channel_message">消息</string>
+    <string name="channel_message_desc">私聊消息的进化版通知</string>
+    <string name="channel_group">群聊消息</string>
+    <string name="channel_group_desc">群聊消息的进化版通知</string>
+    <string name="channel_bot">服务号消息</string>
+    <string name="channel_bot_desc">服务通知、订阅号等服务类消息的进化版通知</string>
+    <string name="action_reply">回复</string>
+    <string name="action_mark_read">标为已读</string>
+    <string name="self_display_name">我</string>
+</resources>
