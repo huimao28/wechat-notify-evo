@@ -24,6 +24,13 @@ object NotificationFactory {
     private const val SUMMARY_ID_GROUP = 900002
     private const val SUMMARY_ID_BOT = 900003
 
+    /**
+     * A group summary is only posted once the group's total unread count
+     * reaches this threshold; below it, conversations just show on their own
+     * and the summary stays cancelled.
+     */
+    private const val SUMMARY_MIN_UNREAD = 100
+
     private const val WECHAT_GREEN = 0xFF07C160.toInt()
 
     fun ensureChannels(context: Context) {
@@ -173,13 +180,20 @@ object NotificationFactory {
         return builder.build()
     }
 
-    /** One summary per group; null when the group has no conversations left. */
+    /**
+     * One summary per group; null when the group has no conversations left
+     * or its total unread count is below [SUMMARY_MIN_UNREAD].
+     */
     fun buildSummaryNotification(
         context: Context,
         type: ConversationType,
     ): Notification? {
         val convs = ConversationStore.all().filter { it.type == type }
         if (convs.isEmpty()) return null
+        val totalUnread = convs.sumOf { conv ->
+            if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size
+        }
+        if (totalUnread < SUMMARY_MIN_UNREAD) return null
         val style = Notification.InboxStyle().setBigContentTitle("微信")
         for (conv in convs.take(5)) {
             val last = conv.messages.lastOrNull()?.text ?: ""
