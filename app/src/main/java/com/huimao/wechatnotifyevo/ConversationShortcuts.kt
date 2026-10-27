@@ -114,6 +114,14 @@ object ConversationShortcuts {
                     // No recursion: wxid is now set, so this publish skips
                     // learning.
                     publish(context, conv)
+                    // Re-post the notification so its bubble metadata is
+                    // fresh: a bubble posted before learning keeps the
+                    // launcher intent and opens WeChat main even after
+                    // the shortcut is updated.
+                    if (ConversationStore.get(conv.nid) === conv) {
+                        WeChatListenerService.repostConversation(context, conv, silent = true)
+                        Log.d(TAG, "Reposted after learning wxid for nid=${conv.nid}")
+                    }
                 } else {
                     Log.w(TAG, "No Main_User for nid=${conv.nid}, launcher fallback stays")
                 }
