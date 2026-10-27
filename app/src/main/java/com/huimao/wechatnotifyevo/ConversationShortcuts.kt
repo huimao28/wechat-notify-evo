@@ -45,13 +45,26 @@ object ConversationShortcuts {
             if (conv.wxid == null && conv.contentIntent != null && Prefs.isBubbleEnabled(context)) {
                 learnWxidAsync(context, conv)
             }
+            // Skip redundant pushes: ShortcutManager rate-limits apps that
+            // push too often (Nevolution checks isRateLimitingActive for
+            // exactly this reason), and pushing an unchanged shortcut buys
+            // nothing. Only push when the intent changed (new conversation,
+            // or wxid just learned) or the shortcut is gone (evicted).
+            val id = shortcutId(conv.nid)
+            val alreadyPublished = conv.shortcutPushed && conv.pushedWxid == conv.wxid &&
+                sm.dynamicShortcuts.any { it.id == id }
+            if (alreadyPublished) return
+            if (sm.isRateLimitingActive) {
+                Log.w(TAG, "Rate limited, skip push for nid=" + conv.nid)
+                return
+            }
             val launch = chatIntent(context, conv) ?: return
             val person = Person.Builder()
                 .setName(conv.title)
                 .setKey("person_${conv.nid}")
                 .apply { conv.largeIcon?.let { setIcon(it) } }
                 .build()
-            val shortcut = ShortcutInfo.Builder(context, shortcutId(conv.nid))
+            val shortcut = ShortcutInfo.Builder(context, id)
                 .setShortLabel(conv.title)
                 .setLongLabel(conv.title)
                 .setLongLived(true)
@@ -64,9 +77,12 @@ object ConversationShortcuts {
             // pushDynamicShortcut evicts the lowest-ranked shortcut when
             // the system limit is reached, so no manual LRU is needed.
             sm.pushDynamicShortcut(shortcut)
+            conv.shortcutPushed = true
+            conv.pushedWxid = conv.wxid
         } catch (e: RuntimeException) {
             // Conversation status is an enhancement: never let a shortcut
             // failure break notification posting.
+            Log.w(TAG, "Failed to push shortcut for nid=" + conv.nid, e)
         }
     }
 

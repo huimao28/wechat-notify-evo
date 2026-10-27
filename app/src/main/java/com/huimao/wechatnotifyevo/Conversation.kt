@@ -34,6 +34,16 @@ class Conversation(val nid: Int) {
      * back to the WeChat launcher until then.
      */
     var wxid: String? = null
+    /**
+     * What the currently published shortcut was built from. ShortcutManager
+     * rate-limits apps that push too often, so a push is skipped when the
+     * shortcut is already published with the same intent (same wxid) — a
+     * push is only needed for a new conversation or when the wxid is
+     * learned. shortcutPushed is set only after a successful push, so a
+     * rate-limited or failed push is retried on the next message.
+     */
+    var shortcutPushed: Boolean = false
+    var pushedWxid: String? = null
     var replyPendingIntent: PendingIntent? = null
     var readPendingIntent: PendingIntent? = null
     var remoteInputResultKey: String? = null
