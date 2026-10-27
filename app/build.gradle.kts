@@ -4,6 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Release signing comes from CI secrets (see .github/workflows/release.yml).
+// Unset outside CI: debug builds are unaffected, release builds fail loudly.
+val releaseKeystoreFile = System.getenv("KEYSTORE_FILE")?.let { file(it) }
+
 android {
     namespace = "com.huimao.wechatnotifyevo"
     compileSdk = 34
@@ -12,13 +16,23 @@ android {
         applicationId = "com.huimao.wechatnotifyevo"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = releaseKeystoreFile
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

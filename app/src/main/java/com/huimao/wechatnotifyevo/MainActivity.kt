@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,11 +22,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -64,6 +68,8 @@ private fun EvoScreen() {
     var enabled by remember { mutableStateOf(Prefs.isEnabled(context)) }
     var replyEnabled by remember { mutableStateOf(Prefs.isReplyEnabled(context)) }
     var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
+    var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
+    var showIconDialog by remember { mutableStateOf(false) }
 
     fun refresh() {
         listenerGranted = isListenerGranted(context)
@@ -131,6 +137,61 @@ private fun EvoScreen() {
             groupEnabled = it
             Prefs.setGroupEnabled(context, it)
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("通知角标图标", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "头像右下角的小图标：默认用微信原始通知的小图标，" +
+                        "微信图标则用微信启动器绿 logo",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Button(onClick = { showIconDialog = true }) {
+                Text(if (iconChoice == Prefs.ICON_WECHAT) "微信图标" else "默认")
+            }
+        }
+        if (showIconDialog) {
+            var selected by remember(iconChoice) { mutableStateOf(iconChoice) }
+            AlertDialog(
+                onDismissRequest = { showIconDialog = false },
+                title = { Text("通知角标图标") },
+                text = {
+                    Column {
+                        IconRadioRow(
+                            label = "默认",
+                            desc = "微信原始通知的小图标",
+                            selected = selected == Prefs.ICON_DEFAULT
+                        ) { selected = Prefs.ICON_DEFAULT }
+                        IconRadioRow(
+                            label = "微信图标",
+                            desc = "微信启动器绿 logo",
+                            selected = selected == Prefs.ICON_WECHAT
+                        ) { selected = Prefs.ICON_WECHAT }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        iconChoice = selected
+                        Prefs.setIconChoice(context, selected)
+                        showIconDialog = false
+                        // Refresh already-posted evolved notifications so the
+                        // change shows immediately, not on the next message.
+                        for (conv in ConversationStore.all()) {
+                            WeChatListenerService.repostConversation(
+                                context, conv, silent = true
+                            )
+                        }
+                    }) { Text("确定") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showIconDialog = false }) { Text("取消") }
+                }
+            )
+        }
         Button(onClick = {
             NotificationListenerService.requestRebind(
                 ComponentName(context, WeChatListenerService::class.java)
@@ -144,6 +205,28 @@ private fun EvoScreen() {
                 "群聊判定是启发式（按“发送者：内容”格式）；v1 不做表情翻译和气泡。",
             style = MaterialTheme.typography.bodySmall
         )
+    }
+}
+
+@Composable
+private fun IconRadioRow(
+    label: String,
+    desc: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Column(modifier = Modifier.padding(start = 8.dp)) {
+            Text(label, style = MaterialTheme.typography.titleSmall)
+            Text(desc, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 

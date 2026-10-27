@@ -8,6 +8,9 @@ import android.app.Person
 import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.os.Build
 
@@ -77,8 +80,39 @@ object NotificationFactory {
         else -> SUMMARY_ID_DIRECT
     }
 
-    private fun smallIcon(context: Context, conv: Conversation): Icon =
-        conv.smallIcon ?: Icon.createWithResource(context, R.drawable.ic_stat_message)
+    /**
+     * Badge icon for evolved notifications. Default keeps WeChat's original
+     * notification small icon (or our own fallback when it is absent); the
+     * "wechat" choice uses WeChat's launcher icon (green logo) instead.
+     * A failed launcher-icon load falls back to the default, never crashes
+     * the listener path.
+     */
+    private fun smallIcon(context: Context, conv: Conversation?): Icon {
+        if (Prefs.iconChoice(context) == Prefs.ICON_WECHAT) {
+            wechatLauncherIcon(context)?.let { return it }
+        }
+        return conv?.smallIcon ?: Icon.createWithResource(context, R.drawable.ic_stat_message)
+    }
+
+    private fun wechatLauncherIcon(context: Context): Icon? {
+        return try {
+            val drawable = context.packageManager
+                .getApplicationIcon(WeChatListenerService.WECHAT_PACKAGE)
+            Icon.createWithBitmap(drawable.toBadgeBitmap())
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Render any drawable (including adaptive icons) into a square bitmap. */
+    private fun Drawable.toBadgeBitmap(): Bitmap {
+        val size = 192
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        setBounds(0, 0, size, size)
+        draw(canvas)
+        return bitmap
+    }
 
     /**
      * Sender identity for MessagingStyle messages (Android 9+). Direct chats
@@ -229,7 +263,7 @@ object NotificationFactory {
         }
         style.setSummaryText("${convs.size} 个会话有新消息")
         return Notification.Builder(context, channelFor(type))
-            .setSmallIcon(Icon.createWithResource(context, R.drawable.ic_stat_message))
+            .setSmallIcon(smallIcon(context, null))
             .setColor(WECHAT_GREEN)
             .setGroup(groupKeyFor(type))
             .setGroupSummary(true)

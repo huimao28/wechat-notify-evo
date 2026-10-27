@@ -21,24 +21,33 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.9"
-      - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Decode release keystore
+        run: printf '%s' "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
+      - name: Build release APK
+        env:
+          KEYSTORE_FILE: /tmp/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease --stacktrace
       - uses: softprops/action-gh-release@v2
         with:
           name: 微信通知进化 ${{ github.ref_name }}
           body: |
-            微信通知进化首个发布（debug 包，供测试）。
+            微信通知进化首个正式签名版。
 
             功能：
             - 微信通知进化为 MessagingStyle 会话样式（Android 17 上可用，替代失效的 Nevolution）
             - 汇总通知按组未读满 100 条才出现，不满只显示各会话自己的通知
             - Android 11+ 会话优先级：进化版通知以系统会话发布，长按通知可按会话调优先 / 默认 / 静音
+            - 通知角标图标可在应用内选择：默认（微信原始通知小图标）或微信启动器图标
 
             已知限制：
             - 直接回复与标为已读依赖微信在通知里提供 car-extender 数据；当前版本微信不提供，故这两项不出现，但消息进化本身不受影响
             - 群聊判定是启发式；会话归档只存在进程内存里，应用进程被杀后历史从下一条新通知重建
             - 本版不做气泡
 
-            安装：下载 app-debug.apk 安装，授予通知使用权（Android 13+ 还需通知权限）。
-          files: app/build/outputs/apk/debug/app-debug.apk
+            安装：下载 app-release.apk 安装，授予通知使用权（Android 13+ 还需通知权限）。
+            注意：本版起改用正式签名，无法直接覆盖安装 v1.0.0 的 debug 签名版，需先卸载旧版再装。
+          files: app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true
