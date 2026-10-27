@@ -12,9 +12,9 @@ import android.widget.Toast
 
 /**
  * Bubble trampoline: a shortcut-based bubble launches the shortcut intent
- * into the bubble window, and that intent is this activity. On window
- * focus (truly foreground, so the send is not background-blocked) it
- * forwards WeChat's own content intent for the conversation — the same
+ * into the bubble window, and that intent is this activity. Once resumed
+ * and focused (truly foreground, so the send is not background-blocked)
+ * it forwards WeChat's own content intent for the conversation — the same
  * intent tapping the evolved notification sends, so it opens the exact
  * chat, not WeChat main. No username learning is involved: learning the
  * username via contentIntent.send + OnFinished produces nothing on
@@ -38,19 +38,38 @@ import android.widget.Toast
  * Finish rules (lessons from the intent-based trampoline versions):
  * never finish immediately after send() — finishing before the target
  * attaches can tear the task down and the target never appears. Finish
- * on pause (the target came up) or after a 5s fallback with a Toast.
+ * on pause (the target took over the bubble window), on focus loss after
+ * a successful send (the target opened fullscreen underneath the bubble,
+ * which floats on top and so never pauses the trampoline), or after a
+ * 5s fallback with a Toast (the send never ran, or ran but the target
+ * never appeared).
  */
 class BubbleTrampolineActivity : Activity() {
     companion object {
         const val EXTRA_NID = "nid"
         private const val TAG = "WNE.Bubble"
+        private const val FORWARD_DELAY_MS = 300L
         private const val FALLBACK_DELAY_MS = 5000L
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private var resumed = false
     private var forwarded = false
+    private var forwardScheduled = false
+    private val forwardRunnable = Runnable {
+        forwardScheduled = false
+        if (resumed && !forwarded) {
+            forwarded = true
+            forward()
+        }
+    }
     private val fallback = Runnable {
         if (!isFinishing) {
+            if (!forwarded) {
+                Log.w(TAG, "Forward timeout, send never ran")
+            } else {
+                Log.w(TAG, "Forward timeout, target never appeared")
+            }
             Toast.makeText(this, "未能打开微信界面", Toast.LENGTH_SHORT).show()
             finish()
         }
@@ -71,11 +90,42 @@ class BubbleTrampolineActivity : Activity() {
         handler.postDelayed(fallback, FALLBACK_DELAY_MS)
     }
 
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        scheduleForward()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        resumed = false
+        handler.removeCallbacks(forwardRunnable)
+        handler.removeCallbacks(fallback)
+        forwardScheduled = false
+        // Target came up (or the user left): exit.
+        finish()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && !forwarded) {
-            forwarded = true
-            forward()
+        if (hasFocus) {
+            scheduleForward()
+        } else if (forwarded) {
+            // Target opened fullscreen underneath the bubble: the bubble
+            // floats on top, so this never pauses, but focus moves to
+            // the fullscreen app. Exit silently — no failure Toast for
+            // a success.
+            handler.removeCallbacks(fallback)
+            finish()
+        }
+    }
+
+    private fun scheduleForward() {
+        if (!forwarded && !forwardScheduled) {
+            forwardScheduled = true
+            // Brief settle delay: sending before the activity is fully
+            // foreground can be silently dropped as a background start.
+            handler.postDelayed(forwardRunnable, FORWARD_DELAY_MS)
         }
     }
 
@@ -100,14 +150,8 @@ class BubbleTrampolineActivity : Activity() {
         }
     }
 
-    override fun onPause() {
-        super.onPause()
-        handler.removeCallbacks(fallback)
-        // Target came up (or the user left): exit.
-        finish()
-    }
-
     override fun onDestroy() {
+        handler.removeCallbacks(forwardRunnable)
         handler.removeCallbacks(fallback)
         super.onDestroy()
     }
