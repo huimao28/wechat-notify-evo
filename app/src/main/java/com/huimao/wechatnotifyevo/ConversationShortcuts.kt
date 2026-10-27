@@ -87,7 +87,12 @@ object ConversationShortcuts {
      * shortcut from being created at all, which drops the bubble.
      */
     private fun trampolineIntent(context: Context, conv: Conversation): Intent {
+        // ShortcutInfo.Builder.setIntent() requires a non-null action
+        // (it throws NullPointerException "intent's action must be set"
+        // otherwise, which silently drops the whole shortcut — and the
+        // bubble with it). ACTION_VIEW fits "view this conversation".
         return Intent(context, BubbleTrampolineActivity::class.java)
+            .setAction(Intent.ACTION_VIEW)
             .putExtra(BubbleTrampolineActivity.EXTRA_NID, conv.nid)
     }
 

@@ -105,7 +105,10 @@ class WeChatListenerService : NotificationListenerService() {
         val conv = ConversationStore.getOrCreate(sbn.id, title)
         conv.title = title
         conv.smallIcon = n.smallIcon
-        conv.largeIcon = n.getLargeIcon()
+        // Keep the last known avatar: WeChat posts no large icon for a
+        // multi-sender group message, and overwriting with null would
+        // drop the avatar to the app icon on exactly those messages.
+        n.getLargeIcon()?.let { conv.largeIcon = it }
         conv.contentIntent = n.contentIntent
 
         // Prefer the car-extender unread conversation when WeChat provides
