@@ -3,6 +3,8 @@ package com.huimao.wechatnotifyevo
 import android.app.Activity
 import android.app.PendingIntent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 
@@ -16,13 +18,34 @@ import android.widget.Toast
  *
  * This must hold a visible window while forwarding: a NoDisplay activity
  * proved unreliable here (the forwarded launch never surfaced and the
- * failure was silent), so this uses a translucent theme and finishes right
- * after forwarding. Failures are toasted instead of swallowed, so a dead
- * bubble tap is diagnosable on device.
+ * failure was silent), so this uses a translucent theme.
+ *
+ * The forward must not run in onCreate: the window is not visible yet
+ * there, and a forward from a not-yet-visible activity can be dropped by
+ * the system without any error. So the forward runs once the window gains
+ * focus, with a 1s fallback in case focus never arrives. Failures are
+ * toasted instead of swallowed, so a dead bubble tap is diagnosable.
  */
 class BubbleActivity : Activity() {
+    private var forwarded = false
+    private val handler = Handler(Looper.getMainLooper())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        @Suppress("DEPRECATION")
+        val hasTarget = intent.getParcelableExtra("target") as? PendingIntent != null
+        Log.d(TAG, "BubbleActivity created, hasTarget=$hasTarget")
+        handler.postDelayed({ if (!isFinishing && !isDestroyed) forward() }, 1000)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) forward()
+    }
+
+    private fun forward() {
+        if (forwarded) return
+        forwarded = true
         try {
             @Suppress("DEPRECATION")
             val target = intent.getParcelableExtra("target") as? PendingIntent
