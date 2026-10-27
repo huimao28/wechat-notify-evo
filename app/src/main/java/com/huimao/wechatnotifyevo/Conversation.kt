@@ -28,22 +28,14 @@ class Conversation(val nid: Int) {
     var largeIcon: Icon? = null
     var contentIntent: PendingIntent? = null
     /**
-     * WeChat username (wxid) for this conversation, learned once via
-     * contentIntent.send + OnFinished reading the Main_User extra
-     * (Nevolution's trick). Null until learned; the shortcut intent falls
-     * back to the WeChat launcher until then.
-     */
-    var wxid: String? = null
-    /**
-     * What the currently published shortcut was built from. ShortcutManager
-     * rate-limits apps that push too often, so a push is skipped when the
-     * shortcut is already published with the same intent (same wxid) — a
-     * push is only needed for a new conversation or when the wxid is
-     * learned. shortcutPushed is set only after a successful push, so a
-     * rate-limited or failed push is retried on the next message.
+     * Whether a shortcut is currently published for this conversation.
+     * ShortcutManager rate-limits apps that push too often, so a push is
+     * skipped when the shortcut is already published — a push is only
+     * needed for a new conversation or when the shortcut is gone.
+     * Set only after a successful push, so a rate-limited or failed push
+     * is retried on the next message.
      */
     var shortcutPushed: Boolean = false
-    var pushedWxid: String? = null
     var replyPendingIntent: PendingIntent? = null
     var readPendingIntent: PendingIntent? = null
     var remoteInputResultKey: String? = null

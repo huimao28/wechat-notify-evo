@@ -20,6 +20,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Bubble trampoline: conversation-shortcut bubbles launch their
+             shortcut intent from the system, so this stays exported (same
+             as Nevolution's plugin launcher activity). Transparent: it only
+             forwards WeChat's content intent, never shows UI of its own. -->
+        <activity
+            android:name=".BubbleTrampolineActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- The system binds this service once notification access is granted.
              exported=true follows the working reference (QQ-Notify-Evolution). -->
         <service
