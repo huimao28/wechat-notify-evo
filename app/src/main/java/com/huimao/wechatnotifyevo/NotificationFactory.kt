@@ -194,12 +194,28 @@ object NotificationFactory {
         // Service notifications (BOT) do not bubble. The shortcut-based
         // Builder is not used here because it would open the shortcut intent
         // (WeChat launcher) instead of this specific conversation.
+        // The system requires bubble PendingIntents to be mutable, but
+        // WeChat's content intent is immutable, so the bubble points at our
+        // own trampoline activity (mutable, created by us) which forwards to
+        // the original intent in the "target" extra. Same pattern as
+        // Nevolution's AgentBubbleActivity. FLAG_MUTABLE exists only on
+        // Android 12+; before that PendingIntents were mutable by default.
         if (Prefs.isBubbleEnabled(context) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP)
         ) {
-            val bubbleIntent = conv.contentIntent ?: wechatLaunchIntent(context)
-            if (bubbleIntent != null) {
+            val target = conv.contentIntent ?: wechatLaunchIntent(context)
+            if (target != null) {
+                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
+                val bubbleIntent = PendingIntent.getActivity(
+                    context, conv.nid,
+                    Intent(context, BubbleActivity::class.java).putExtra("target", target),
+                    flags
+                )
                 builder.setBubbleMetadata(
                     Notification.BubbleMetadata.Builder(
                         bubbleIntent,
