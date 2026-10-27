@@ -57,7 +57,7 @@ object ConversationShortcuts {
                 .setLongLived(true)
                 .setIntent(launch)
                 .setPersons(arrayOf(person))
-                .setCategories(listOf("android.shortcut.conversation"))
+                .setCategories(setOf("android.shortcut.conversation"))
                 .setLocusId(LocusId(shortcutId(conv.nid)))
                 .apply { conv.largeIcon?.let { setIcon(it) } }
                 .build()
