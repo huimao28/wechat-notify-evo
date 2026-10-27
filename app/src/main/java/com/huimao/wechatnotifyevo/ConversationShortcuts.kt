@@ -81,17 +81,14 @@ object ConversationShortcuts {
      * The bubble opens our trampoline, which forwards WeChat's own content
      * intent: tapping the evolved notification opens the exact chat, so the
      * trampoline does too, with no username learning in between. The live
-     * content intent is looked up by nid at tap time; the extra is only a
-     * fallback for a conversation that left the store.
+     * content intent is looked up by nid at tap time. Only the nid travels
+     * in the shortcut intent: shortcut intents are persisted by the system,
+     * and a PendingIntent extra is not persistable — it can keep the
+     * shortcut from being created at all, which drops the bubble.
      */
     private fun trampolineIntent(context: Context, conv: Conversation): Intent {
         return Intent(context, BubbleTrampolineActivity::class.java)
             .putExtra(BubbleTrampolineActivity.EXTRA_NID, conv.nid)
-            .apply {
-                conv.contentIntent?.let {
-                    putExtra(BubbleTrampolineActivity.EXTRA_TARGET, it)
-                }
-            }
     }
 
     fun remove(context: Context, nid: Int) {

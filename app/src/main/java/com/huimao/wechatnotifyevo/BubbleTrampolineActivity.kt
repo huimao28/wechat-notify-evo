@@ -20,8 +20,12 @@ import android.widget.Toast
  * log stays empty), so the shortcut would otherwise stay on the WeChat
  * launcher intent.
  *
- * The live content intent is looked up by nid at tap time; the "target"
- * extra is only a fallback for a conversation that left the store.
+ * The live content intent is looked up by nid at tap time. Only the nid
+ * travels in the shortcut intent: shortcut intents are persisted by the
+ * system, and a PendingIntent extra is not persistable — it can keep the
+ * shortcut from being created at all, which drops the bubble. If the
+ * conversation left the store (process death, dismissal), the trampoline
+ * has nothing to forward and just exits.
  *
  * Finish rules (lessons from the intent-based trampoline versions):
  * never finish immediately after send() — finishing before the target
@@ -31,7 +35,6 @@ import android.widget.Toast
 class BubbleTrampolineActivity : Activity() {
     companion object {
         const val EXTRA_NID = "nid"
-        const val EXTRA_TARGET = "target"
         private const val TAG = "WNE.Bubble"
         private const val FALLBACK_DELAY_MS = 5000L
     }
@@ -61,10 +64,7 @@ class BubbleTrampolineActivity : Activity() {
 
     private fun forward() {
         val nid = intent.getIntExtra(EXTRA_NID, -1)
-        @Suppress("DEPRECATION")
-        val fallbackPi = intent.getParcelableExtra(EXTRA_TARGET) as? PendingIntent
         val pi = if (nid != -1) ConversationStore.get(nid)?.contentIntent else null
-            ?: fallbackPi
         if (pi == null) {
             Log.w(TAG, "No content intent for nid=$nid")
             finish()
