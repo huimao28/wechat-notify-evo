@@ -8,6 +8,7 @@ import android.app.Person
 import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
+import android.content.LocusId
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
@@ -187,42 +188,24 @@ object NotificationFactory {
         // the system offers per-conversation priority/silent settings.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setShortcutId(ConversationShortcuts.shortcutId(conv.nid))
+            builder.setLocusId(LocusId(ConversationShortcuts.shortcutId(conv.nid)))
         }
-        // Android 11+: system bubbles, same mechanism as Telegram and
-        // Nevolution: the bubble expands to WeChat's original content intent
-        // for this conversation (or the WeChat launcher as fallback).
-        // Service notifications (BOT) do not bubble. The shortcut-based
-        // Builder is not used here because it would open the shortcut intent
-        // (WeChat launcher) instead of this specific conversation.
-        // The system requires bubble PendingIntents to be mutable, but
-        // WeChat's content intent is immutable, so the bubble points at our
-        // own trampoline activity (mutable, created by us) which forwards to
-        // the original intent in the "target" extra. Same pattern as
-        // Nevolution's AgentBubbleActivity. FLAG_MUTABLE exists only on
-        // Android 12+; before that PendingIntents were mutable by default.
+        // Android 11+: system bubbles, Nevolution-style shortcut bubbles:
+        // the bubble references the conversation shortcut id, and the system
+        // launches the shortcut's intent (LauncherUI + Main_User, or the
+        // WeChat launcher as fallback) directly into the bubble window. No
+        // trampoline PendingIntent, so no mutability crash and no second-hop
+        // launch for the system to silently drop. Service notifications
+        // (BOT) do not bubble.
         if (Prefs.isBubbleEnabled(context) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP)
         ) {
-            val target = conv.contentIntent ?: wechatLaunchIntent(context)
-            if (target != null) {
-                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-                } else {
-                    PendingIntent.FLAG_UPDATE_CURRENT
-                }
-                val bubbleIntent = PendingIntent.getActivity(
-                    context, conv.nid,
-                    Intent(context, BubbleActivity::class.java).putExtra("target", target),
-                    flags
-                )
-                builder.setBubbleMetadata(
-                    Notification.BubbleMetadata.Builder(
-                        bubbleIntent,
-                        conv.largeIcon ?: smallIcon(context, conv)
-                    ).setDesiredHeight(512).build()
-                )
-            }
+            builder.setBubbleMetadata(
+                Notification.BubbleMetadata.Builder(ConversationShortcuts.shortcutId(conv.nid))
+                    .setDesiredHeight(512)
+                    .build()
+            )
         }
         conv.largeIcon?.let { builder.setLargeIcon(it) }
         val unread = if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size

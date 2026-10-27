@@ -27,6 +27,13 @@ class Conversation(val nid: Int) {
     var smallIcon: Icon? = null
     var largeIcon: Icon? = null
     var contentIntent: PendingIntent? = null
+    /**
+     * WeChat username (wxid) for this conversation, learned once via
+     * contentIntent.send + OnFinished reading the Main_User extra
+     * (Nevolution's trick). Null until learned; the shortcut intent falls
+     * back to the WeChat launcher until then.
+     */
+    var wxid: String? = null
     var replyPendingIntent: PendingIntent? = null
     var readPendingIntent: PendingIntent? = null
     var remoteInputResultKey: String? = null
