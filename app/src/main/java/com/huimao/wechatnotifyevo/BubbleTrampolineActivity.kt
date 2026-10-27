@@ -1,18 +1,20 @@
 package com.huimao.wechatnotifyevo
 
 import android.app.Activity
-import android.app.PendingIntent
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Gravity
+import android.widget.TextView
 import android.widget.Toast
 
 /**
  * Bubble trampoline: a shortcut-based bubble launches the shortcut intent
- * into the bubble window, and that intent is this transparent activity.
- * On window focus (truly foreground, so the send is not background-blocked)
- * it forwards WeChat's own content intent for the conversation — the same
+ * into the bubble window, and that intent is this activity. On window
+ * focus (truly foreground, so the send is not background-blocked) it
+ * forwards WeChat's own content intent for the conversation — the same
  * intent tapping the evolved notification sends, so it opens the exact
  * chat, not WeChat main. No username learning is involved: learning the
  * username via contentIntent.send + OnFinished produces nothing on
@@ -26,6 +28,12 @@ import android.widget.Toast
  * shortcut from being created at all, which drops the bubble. If the
  * conversation left the store (process death, dismissal), the trampoline
  * has nothing to forward and just exits.
+ *
+ * The trampoline shows an opaque loading screen, not a transparent
+ * window: a transparent window may not count as a visible foreground
+ * window, so its send can be background-blocked (and a black window
+ * tells nobody which step failed). With an opaque screen the outcome is
+ * explicit: WeChat comes up, or the fallback Toast explains it didn't.
  *
  * Finish rules (lessons from the intent-based trampoline versions):
  * never finish immediately after send() — finishing before the target
@@ -50,7 +58,16 @@ class BubbleTrampolineActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // No UI: transparent theme, forward on focus.
+        // Opaque loading screen: visible foreground window, and an
+        // explicit state instead of a black window when forwarding stalls.
+        val tv = TextView(this).apply {
+            text = "正在打开微信…"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.WHITE)
+            setTextColor(Color.BLACK)
+        }
+        setContentView(tv)
         handler.postDelayed(fallback, FALLBACK_DELAY_MS)
     }
 
@@ -74,8 +91,10 @@ class BubbleTrampolineActivity : Activity() {
             pi.send()
             Log.d(TAG, "Forwarded content intent for nid=$nid")
             // Do not finish here: see the class comment.
-        } catch (e: PendingIntent.CanceledException) {
-            Log.w(TAG, "Content intent canceled for nid=$nid")
+        } catch (e: Exception) {
+            // CanceledException included: any send failure must surface
+            // instead of leaving a black window behind.
+            Log.w(TAG, "Forward failed for nid=$nid", e)
             Toast.makeText(this, "未能打开微信界面", Toast.LENGTH_SHORT).show()
             finish()
         }
