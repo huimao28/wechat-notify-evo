@@ -41,12 +41,14 @@
         <!-- Trampoline for system bubbles: bubble PendingIntents must be
              mutable, but WeChat's content intent is immutable, so the bubble
              points here (mutable, created by us) and this activity forwards
-             to the original intent in the "target" extra. Translucent (not
-             NoDisplay): the forward must happen from a visible window or the
-             system may drop it. -->
+             to the original intent in the "target" extra. It has real UI
+             (no explicit theme: inherits the opaque app theme) and never
+             finishes itself: an empty activity that finished while its
+             bubble was still in the expanded stack left an empty bubble
+             task that crashed on switch-back. The system destroys this
+             activity with the bubble. -->
         <activity
             android:name=".BubbleActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:exported="false"
             android:excludeFromRecents="true" />
 
