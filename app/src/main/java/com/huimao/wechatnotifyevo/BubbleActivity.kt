@@ -23,11 +23,19 @@ import android.widget.Toast
  * The forward must not run in onCreate: the window is not visible yet
  * there, and a forward from a not-yet-visible activity can be dropped by
  * the system without any error. So the forward runs once the window gains
- * focus, with a 1s fallback in case focus never arrives. Failures are
- * toasted instead of swallowed, so a dead bubble tap is diagnosable.
+ * focus, with a 1s fallback in case focus never arrives.
+ *
+ * Do NOT finish right after forwarding: the forwarded launch is scheduled
+ * asynchronously, and finishing immediately can tear down the bubble task
+ * before the target activity attaches to it, so nothing ever appears and
+ * no error is reported (v1.0.6 symptom: send() returned normally, no
+ * exception, no Toast, yet no WeChat UI). Instead, finish in onPause (the
+ * target has come up) or after a 5s backstop (nothing came up: finish and
+ * toast, so the failure is visible instead of silent).
  */
 class BubbleActivity : Activity() {
     private var forwarded = false
+    private var pauseFinished = false
     private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,11 +44,32 @@ class BubbleActivity : Activity() {
         val hasTarget = intent.getParcelableExtra("target") as? PendingIntent != null
         Log.d(TAG, "BubbleActivity created, hasTarget=$hasTarget")
         handler.postDelayed({ if (!isFinishing && !isDestroyed) forward() }, 1000)
+        handler.postDelayed({
+            if (forwarded && !pauseFinished && !isFinishing && !isDestroyed) {
+                Log.w(TAG, "Bubble target never surfaced after 5s")
+                Toast.makeText(this, "未能打开微信界面", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+        }, 5000)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) forward()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (forwarded) {
+            pauseFinished = true
+            Log.d(TAG, "Bubble paused after forward, finishing")
+            finish()
+        }
+    }
+
+    override fun onDestroy() {
+        Log.d(TAG, "Bubble destroyed")
+        super.onDestroy()
     }
 
     private fun forward() {
@@ -52,18 +81,21 @@ class BubbleActivity : Activity() {
             if (target == null) {
                 Log.w(TAG, "Bubble target missing")
                 Toast.makeText(this, "气泡目标丢失", Toast.LENGTH_SHORT).show()
+                finish()
             } else {
-                Log.d(TAG, "Bubble forwarding to target")
+                Log.d(TAG, "Bubble forwarding to target creator=" + target.creatorPackage)
                 target.send()
+                Log.d(TAG, "Bubble send() returned normally")
             }
         } catch (e: PendingIntent.CanceledException) {
             Log.w(TAG, "Bubble target canceled", e)
             Toast.makeText(this, "原通知已失效，无法打开微信", Toast.LENGTH_SHORT).show()
+            finish()
         } catch (e: Exception) {
             Log.w(TAG, "Bubble forward failed", e)
             Toast.makeText(this, "打开微信失败：" + (e.message ?: "未知原因"), Toast.LENGTH_SHORT).show()
+            finish()
         }
-        finish()
     }
 
     companion object {
