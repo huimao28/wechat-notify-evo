@@ -41,7 +41,7 @@ object Prefs {
     }
 
     fun iconChoice(context: Context): String =
-        prefs(context).getString(KEY_ICON, ICON_DEFAULT) ?: ICON_DEFAULT
+        prefs(context).getString(KEY_ICON, ICON_WECHAT) ?: ICON_WECHAT
 
     fun setIconChoice(context: Context, value: String) {
         prefs(context).edit().putString(KEY_ICON, value).apply()
