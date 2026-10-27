@@ -8,6 +8,15 @@ plugins {
 // Unset outside CI: debug builds are unaffected, release builds fail loudly.
 val releaseKeystoreFile = System.getenv("KEYSTORE_FILE")?.let { file(it) }
 
+// Detect the keystore format from its content (JKS magic vs PKCS12 ASN.1),
+// so JKS and .p12 keystores both work without extra configuration.
+val releaseKeystoreType: String? = releaseKeystoreFile?.takeIf { it.exists() }?.let { ks ->
+    val header = ks.inputStream().use { it.readNBytes(4) }
+    if (header.size == 4 && header[0] == 0xFE.toByte() && header[1] == 0xED.toByte() &&
+        header[2] == 0xFE.toByte() && header[3] == 0xED.toByte()
+    ) "JKS" else "PKCS12"
+}
+
 android {
     namespace = "com.huimao.wechatnotifyevo"
     compileSdk = 34
@@ -23,6 +32,7 @@ android {
     signingConfigs {
         create("release") {
             storeFile = releaseKeystoreFile
+            storeType = releaseKeystoreType
             storePassword = System.getenv("KEYSTORE_PASSWORD")
             keyAlias = System.getenv("KEY_ALIAS")
             keyPassword = System.getenv("KEY_PASSWORD")
