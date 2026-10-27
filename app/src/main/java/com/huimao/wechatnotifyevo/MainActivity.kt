@@ -69,6 +69,7 @@ private fun EvoScreen() {
     var replyEnabled by remember { mutableStateOf(Prefs.isReplyEnabled(context)) }
     var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
+    var bubbleEnabled by remember { mutableStateOf(Prefs.isBubbleEnabled(context)) }
     var showIconDialog by remember { mutableStateOf(false) }
 
     fun refresh() {
@@ -137,6 +138,19 @@ private fun EvoScreen() {
             groupEnabled = it
             Prefs.setGroupEnabled(context, it)
         }
+        SwitchRow(
+            label = "消息气泡",
+            desc = "会话通知以系统气泡显示，点气泡直接进微信对应聊天（需在系统设置里允许本应用显示气泡）",
+            checked = bubbleEnabled
+        ) {
+            bubbleEnabled = it
+            Prefs.setBubbleEnabled(context, it)
+            // Rebuild already-posted evolved notifications so the change
+            // shows immediately, not on the next message.
+            for (conv in ConversationStore.all()) {
+                WeChatListenerService.repostConversation(context, conv, silent = true)
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -202,7 +216,7 @@ private fun EvoScreen() {
         }
         Text(
             "已知限制：直接回复与标为已读依赖微信是否在通知里提供相应入口；" +
-                "群聊判定是启发式（按“发送者：内容”格式）；v1 不做表情翻译和气泡。",
+                "群聊判定是启发式（按“发送者：内容”格式）；v1 不做表情翻译。",
             style = MaterialTheme.typography.bodySmall
         )
     }

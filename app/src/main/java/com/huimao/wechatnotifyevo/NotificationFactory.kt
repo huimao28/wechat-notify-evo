@@ -188,6 +188,26 @@ object NotificationFactory {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setShortcutId(ConversationShortcuts.shortcutId(conv.nid))
         }
+        // Android 11+: system bubbles, same mechanism as Telegram and
+        // Nevolution: the bubble expands to WeChat's original content intent
+        // for this conversation (or the WeChat launcher as fallback).
+        // Service notifications (BOT) do not bubble. The shortcut-based
+        // Builder is not used here because it would open the shortcut intent
+        // (WeChat launcher) instead of this specific conversation.
+        if (Prefs.isBubbleEnabled(context) &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP)
+        ) {
+            val bubbleIntent = conv.contentIntent ?: wechatLaunchIntent(context)
+            if (bubbleIntent != null) {
+                builder.setBubbleMetadata(
+                    Notification.BubbleMetadata.Builder(
+                        bubbleIntent,
+                        conv.largeIcon ?: smallIcon(context, conv)
+                    ).setDesiredHeight(512).build()
+                )
+            }
+        }
         conv.largeIcon?.let { builder.setLargeIcon(it) }
         val unread = if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size
         if (unread > 0) builder.setNumber(unread)

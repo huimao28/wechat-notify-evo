@@ -9,6 +9,7 @@ object Prefs {
     private const val KEY_REPLY = "reply_enabled"
     private const val KEY_GROUP = "group_enabled"
     private const val KEY_ICON = "icon_choice"
+    private const val KEY_BUBBLE = "bubble_enabled"
 
     /** Small-icon badge choice: WeChat's original notification icon. */
     const val ICON_DEFAULT = "default"
@@ -38,6 +39,13 @@ object Prefs {
 
     fun setGroupEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_GROUP, value).apply()
+    }
+
+    fun isBubbleEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_BUBBLE, true)
+
+    fun setBubbleEnabled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_BUBBLE, value).apply()
     }
 
     fun iconChoice(context: Context): String =
