@@ -14,7 +14,7 @@ object Prefs {
     /** Small-icon badge choice: WeChat's original notification icon. */
     const val ICON_DEFAULT = "default"
 
-    /** Small-icon badge choice: WeChat's launcher icon (green logo). */
+    /** Small-icon choice: transparent monochrome WeChat-style bubbles. */
     const val ICON_WECHAT = "wechat"
 
     const val ICON_CUSTOM = "custom"

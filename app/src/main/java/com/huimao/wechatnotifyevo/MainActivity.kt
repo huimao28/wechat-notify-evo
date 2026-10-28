@@ -178,9 +178,9 @@ private fun EvoScreen() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("通知角标图标", style = MaterialTheme.typography.titleMedium)
+                Text("通知小图标", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "会话头像右下角的图标。部分系统与状态栏共用小图标，修改可能同时影响状态栏；实际显示由系统决定。",
+                    "修改状态栏小图标；头像角标由系统绘制，不保证随之改变，也无法可靠地单独设置。",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -196,7 +196,7 @@ private fun EvoScreen() {
             var selected by remember(iconChoice) { mutableStateOf(iconChoice) }
             AlertDialog(
                 onDismissRequest = { showIconDialog = false },
-                title = { Text("通知角标图标") },
+                title = { Text("通知小图标") },
                 text = {
                     Column {
                         IconRadioRow(
@@ -206,7 +206,7 @@ private fun EvoScreen() {
                         ) { selected = Prefs.ICON_DEFAULT }
                         IconRadioRow(
                             label = "微信图标",
-                            desc = "微信启动器绿 logo",
+                            desc = "透明背景、白色微信样式双气泡",
                             selected = selected == Prefs.ICON_WECHAT
                         ) { selected = Prefs.ICON_WECHAT }
                         if (CustomNotificationIcon.load(context) != null) {

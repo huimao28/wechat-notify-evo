@@ -9,9 +9,6 @@ import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
 import android.content.LocusId
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.os.Build
 
@@ -81,40 +78,13 @@ object NotificationFactory {
         else -> SUMMARY_ID_DIRECT
     }
 
-    /**
-     * Badge icon for evolved notifications. Default keeps WeChat's original
-     * notification small icon (or our own fallback when it is absent); the
-     * "wechat" choice uses WeChat's launcher icon (green logo) instead.
-     * AOSP conversation badges share this small icon with the status bar;
-     * other system implementations may differ. Failed loads fall back to the
-     * original notification icon (or our fallback).
-     */
+    /** Small icon is shared with the status bar; shade rendering is system-controlled. */
     private fun smallIcon(context: Context, conv: Conversation?): Icon {
         when (Prefs.iconChoice(context)) {
-            Prefs.ICON_WECHAT -> wechatLauncherIcon(context)?.let { return it }
+            Prefs.ICON_WECHAT -> return Icon.createWithResource(context, R.drawable.ic_stat_wechat)
             Prefs.ICON_CUSTOM -> CustomNotificationIcon.load(context)?.let { return it }
         }
         return conv?.smallIcon ?: Icon.createWithResource(context, R.drawable.ic_stat_message)
-    }
-
-    private fun wechatLauncherIcon(context: Context): Icon? {
-        return try {
-            val drawable = context.packageManager
-                .getApplicationIcon(WeChatListenerService.WECHAT_PACKAGE)
-            Icon.createWithBitmap(drawable.toBadgeBitmap())
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    /** Render any drawable (including adaptive icons) into a square bitmap. */
-    private fun Drawable.toBadgeBitmap(): Bitmap {
-        val size = 192
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        setBounds(0, 0, size, size)
-        draw(canvas)
-        return bitmap
     }
 
     /**
