@@ -33,12 +33,12 @@ object PendingIntentDiagnostic {
         }
         handler.postDelayed({ finish("timeout", null) }, TIMEOUT_MS)
         try {
-            pi.send(null, 0, object : PendingIntent.OnFinished {
+            pi.send(null, 0, Intent(), object : PendingIntent.OnFinished {
                 override fun onSendFinished(
-                    pendingIntent: PendingIntent?, resultCode: Int, resultData: String?, resultExtras: Bundle?
+                    pendingIntent: PendingIntent?, intent: Intent?, resultCode: Int, resultData: String?, resultExtras: Bundle?
                 ) {
-                    // Main_User is checked by key only; its value is never read or logged.
-                    val present = resultExtras?.containsKey("Main_User") == true
+                    // Check only presence; never log values or intent contents.
+                    val present = intent?.hasExtra("Main_User") == true || resultExtras?.containsKey("Main_User") == true
                     finish("callback", present)
                 }
             }, handler)
