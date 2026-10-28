@@ -71,6 +71,7 @@ private fun EvoScreen() {
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
     var bubbleEnabled by remember { mutableStateOf(Prefs.isBubbleEnabled(context)) }
     var showIconDialog by remember { mutableStateOf(false) }
+    var probeResult by remember { mutableStateOf<String?>(null) }
 
     fun refresh() {
         listenerGranted = isListenerGranted(context)
@@ -241,6 +242,22 @@ private fun EvoScreen() {
                 }
             )
         }
+        Button(onClick = {
+            val conv = ConversationStore.all().maxByOrNull { it.messages.maxOfOrNull { m -> m.timestamp } ?: 0L }
+            val pi = conv?.contentIntent
+            if (conv == null || pi == null) {
+                probeResult = "没有可测试的活跃会话"
+            } else {
+                probeResult = "测试中…仅在用户点击后发送原始入口"
+                PendingIntentDiagnostic.send(pi, conv.nid) { result ->
+                    probeResult = "nid=${result.nid} 状态=${result.status} Main_User存在=${result.mainUserPresent} 耗时=${result.elapsedMs}ms"
+                }
+            }
+        }) {
+            Text("诊断：测试原始入口回调")
+        }
+        probeResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        Text("仅手动触发；可能打开微信。不会记录用户名、通知正文或 Intent 内容。超时：5 秒。", style = MaterialTheme.typography.bodySmall)
         Button(onClick = {
             NotificationListenerService.requestRebind(
                 ComponentName(context, WeChatListenerService::class.java)
