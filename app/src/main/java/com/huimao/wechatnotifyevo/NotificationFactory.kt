@@ -85,12 +85,14 @@ object NotificationFactory {
      * Badge icon for evolved notifications. Default keeps WeChat's original
      * notification small icon (or our own fallback when it is absent); the
      * "wechat" choice uses WeChat's launcher icon (green logo) instead.
-     * A failed launcher-icon load falls back to the default, never crashes
-     * the listener path.
+     * AOSP conversation badges share this small icon with the status bar;
+     * other system implementations may differ. Failed loads fall back to the
+     * original notification icon (or our fallback).
      */
     private fun smallIcon(context: Context, conv: Conversation?): Icon {
-        if (Prefs.iconChoice(context) == Prefs.ICON_WECHAT) {
-            wechatLauncherIcon(context)?.let { return it }
+        when (Prefs.iconChoice(context)) {
+            Prefs.ICON_WECHAT -> wechatLauncherIcon(context)?.let { return it }
+            Prefs.ICON_CUSTOM -> CustomNotificationIcon.load(context)?.let { return it }
         }
         return conv?.smallIcon ?: Icon.createWithResource(context, R.drawable.ic_stat_message)
     }

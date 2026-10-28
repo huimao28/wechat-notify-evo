@@ -17,6 +17,8 @@ object Prefs {
     /** Small-icon badge choice: WeChat's launcher icon (green logo). */
     const val ICON_WECHAT = "wechat"
 
+    const val ICON_CUSTOM = "custom"
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 

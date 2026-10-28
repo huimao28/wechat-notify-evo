@@ -78,6 +78,27 @@ private fun EvoScreen() {
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh() }
 
+    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val appContext = context.applicationContext
+            Thread {
+                val success = CustomNotificationIcon.import(appContext, uri)
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    if (success) {
+                        iconChoice = Prefs.ICON_CUSTOM
+                        Prefs.setIconChoice(appContext, iconChoice)
+                        showIconDialog = false
+                        for (conv in ConversationStore.all()) {
+                            WeChatListenerService.repostConversation(appContext, conv, silent = true)
+                        }
+                    } else {
+                        Toast.makeText(appContext, "图片无法导入，请选择不超过 10 MB 的有效图片", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }.start()
+        }
+    }
+
     val postPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { refresh() }
@@ -159,13 +180,16 @@ private fun EvoScreen() {
             Column(modifier = Modifier.weight(1f)) {
                 Text("通知角标图标", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "头像右下角的小图标：默认用微信原始通知的小图标，" +
-                        "微信图标则用微信启动器绿 logo",
+                    "会话头像右下角的图标。部分系统与状态栏共用小图标，修改可能同时影响状态栏；实际显示由系统决定。",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
             Button(onClick = { showIconDialog = true }) {
-                Text(if (iconChoice == Prefs.ICON_WECHAT) "微信图标" else "默认")
+                Text(when (iconChoice) {
+                    Prefs.ICON_WECHAT -> "微信图标"
+                    Prefs.ICON_CUSTOM -> "自定义"
+                    else -> "默认"
+                })
             }
         }
         if (showIconDialog) {
@@ -185,6 +209,17 @@ private fun EvoScreen() {
                             desc = "微信启动器绿 logo",
                             selected = selected == Prefs.ICON_WECHAT
                         ) { selected = Prefs.ICON_WECHAT }
+                        if (CustomNotificationIcon.load(context) != null) {
+                            IconRadioRow(
+                                label = "自定义",
+                                desc = "使用已保存的图片",
+                                selected = selected == Prefs.ICON_CUSTOM
+                            ) { selected = Prefs.ICON_CUSTOM }
+                        }
+                        TextButton(onClick = { imageLauncher.launch("image/*") }) {
+                            Text("选择自定义图片")
+                        }
+                        Text("透明图片使用透明度；不透明图片以亮度作为遮罩（白色显示，黑色透明）。选择成功后立即应用。", style = MaterialTheme.typography.bodySmall)
                     }
                 },
                 confirmButton = {
