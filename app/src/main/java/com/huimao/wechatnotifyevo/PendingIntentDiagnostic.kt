@@ -33,7 +33,7 @@ object PendingIntentDiagnostic {
         }
         handler.postDelayed({ finish("timeout", null) }, TIMEOUT_MS)
         try {
-            pi.send(null, 0, Intent(), object : PendingIntent.OnFinished {
+            pi.send(null, 0, null, object : PendingIntent.OnFinished {
                 override fun onSendFinished(
                     pendingIntent: PendingIntent?, intent: Intent?, resultCode: Int, resultData: String?, resultExtras: Bundle?
                 ) {
@@ -44,8 +44,9 @@ object PendingIntentDiagnostic {
             }, handler)
         } catch (e: PendingIntent.CanceledException) {
             finish("canceled", null)
-        } catch (_: RuntimeException) {
-            finish("failed", null)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "send failed exceptionType=${e.javaClass.name}")
+            finish("failed:${e.javaClass.simpleName}", null)
         }
     }
 }
