@@ -70,6 +70,7 @@ private fun EvoScreen() {
     var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
     var bubbleEnabled by remember { mutableStateOf(Prefs.isBubbleEnabled(context)) }
+    var launcherControl by remember { mutableStateOf(Prefs.isLauncherControlEnabled(context)) }
     var showIconDialog by remember { mutableStateOf(false) }
     var probeResult by remember { mutableStateOf<String?>(null) }
 
@@ -162,13 +163,24 @@ private fun EvoScreen() {
         }
         SwitchRow(
             label = "消息气泡",
-            desc = "会话通知以系统气泡显示，点气泡直接进微信对应聊天（需在系统设置里允许本应用显示气泡）",
+            desc = "请求系统气泡（需系统允许）；展示由系统控制，打开微信不代表聊天已嵌入气泡。",
             checked = bubbleEnabled
         ) {
             bubbleEnabled = it
             Prefs.setBubbleEnabled(context, it)
             // Rebuild already-posted evolved notifications so the change
             // shows immediately, not on the next message.
+            for (conv in ConversationStore.all()) {
+                WeChatListenerService.repostConversation(context, conv, silent = true)
+            }
+        }
+        SwitchRow(
+            label = "实验：直接 launcher 对照（默认关闭）",
+            desc = "仅测试微信首页入口，不保证对应聊天或气泡展示。关闭恢复原通知中转；切换后请关闭旧气泡再测试。",
+            checked = launcherControl
+        ) {
+            launcherControl = it
+            Prefs.setLauncherControlEnabled(context, it)
             for (conv in ConversationStore.all()) {
                 WeChatListenerService.repostConversation(context, conv, silent = true)
             }

@@ -16,21 +16,43 @@ import android.util.Log
  * priority/silent settings that survive reboots. Below Android 11 these
  * calls are no-ops and notifications behave exactly as before.
  *
- * The shortcut intent is our trampoline, not WeChat directly: learning the
- * WeChat username (Nevolution's contentIntent.send + OnFinished trick)
- * produces nothing on Android 17 — the background send's callback never
- * fires (WNE.Shortcuts log stays empty after a fresh message), so the
- * shortcut would stay on the WeChat launcher intent and the bubble would
- * open WeChat main. The trampoline instead forwards WeChat's own content
- * intent at tap time (a user gesture, so the trampoline is foreground and
- * its send is not background-blocked); tapping the evolved notification
- * opens the exact chat, so the trampoline does too. The system bubble
- * references this shortcut id.
+ * Default: our trampoline forwards the opaque notification PendingIntent
+ * on user interaction. Optional control: the exported public WeChat launcher,
+ * without conversation extras. Launcher control does not route to a chat.
+ * Neither route guarantees that the system embeds WeChat inside a bubble.
  */
 object ConversationShortcuts {
     private const val TAG = "WNE.Shortcuts"
 
     fun shortcutId(nid: Int): String = "conv_$nid"
+
+    /** Resolve only an exported, unprotected MAIN/LAUNCHER entry. No chat extras. */
+    private fun targetIntent(context: Context, conv: Conversation): Intent? {
+        if (!Prefs.isLauncherControlEnabled(context)) return trampolineIntent(context, conv)
+        val query = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
+            .setPackage(WeChatListenerService.WECHAT_PACKAGE)
+        val info = context.packageManager.queryIntentActivities(query, 0)
+            .mapNotNull { it.activityInfo }
+            .firstOrNull {
+                it.packageName == WeChatListenerService.WECHAT_PACKAGE &&
+                    it.exported && it.enabled && it.applicationInfo.enabled &&
+                    it.permission.isNullOrEmpty()
+            } ?: return null
+        return Intent(query).setClassName(info.packageName, info.name)
+    }
+
+    /** Do not attach a bubble to a stale target after a failed/rate-limited switch. */
+    fun isTargetPublished(context: Context, conv: Conversation): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        return try {
+            val target = targetIntent(context, conv) ?: return false
+            context.getSystemService(ShortcutManager::class.java)?.dynamicShortcuts
+                ?.any { it.id == shortcutId(conv.nid) && it.intent?.filterEquals(target) == true } == true
+        } catch (e: RuntimeException) {
+            false
+        }
+    }
 
     fun publish(context: Context, conv: Conversation) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
@@ -43,14 +65,18 @@ object ConversationShortcuts {
             // tap time), so a push is only needed once, or again if the
             // shortcut is gone (evicted).
             val id = shortcutId(conv.nid)
+            val launch = targetIntent(context, conv)
+            if (launch == null) {
+                Log.w(TAG, "Public launcher unavailable; no control bubble published")
+                return
+            }
             val alreadyPublished = conv.shortcutPushed &&
-                sm.dynamicShortcuts.any { it.id == id }
+                sm.dynamicShortcuts.any { it.id == id && it.intent?.filterEquals(launch) == true }
             if (alreadyPublished) return
             if (sm.isRateLimitingActive) {
                 Log.w(TAG, "Rate limited, skip push for nid=" + conv.nid)
                 return
             }
-            val launch = trampolineIntent(context, conv)
             val person = Person.Builder()
                 .setName(conv.title)
                 .setKey("person_${conv.nid}")

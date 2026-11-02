@@ -162,16 +162,14 @@ object NotificationFactory {
             builder.setShortcutId(ConversationShortcuts.shortcutId(conv.nid))
             builder.setLocusId(LocusId(ConversationShortcuts.shortcutId(conv.nid)))
         }
-        // Android 11+: system bubbles, Nevolution-style shortcut bubbles:
-        // the bubble references the conversation shortcut id, and the system
-        // launches the shortcut's intent (LauncherUI + Main_User, or the
-        // WeChat launcher as fallback) directly into the bubble window. No
-        // trampoline PendingIntent, so no mutability crash and no second-hop
-        // launch for the system to silently drop. Service notifications
-        // (BOT) do not bubble.
+        // Android 11+: shortcut target is normally our trampoline. The manual
+        // launcher control uses only WeChat's public home entry, never chat extras.
+        // Neither mode guarantees embedding; the system controls bubble display.
+        // A stale/missing target must not masquerade as the selected experiment.
         if (Prefs.isBubbleEnabled(context) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP)
+            (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP) &&
+            ConversationShortcuts.isTargetPublished(context, conv)
         ) {
             builder.setBubbleMetadata(
                 Notification.BubbleMetadata.Builder(ConversationShortcuts.shortcutId(conv.nid))

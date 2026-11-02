@@ -50,6 +50,14 @@ object Prefs {
         prefs(context).edit().putBoolean(KEY_BUBBLE, value).apply()
     }
 
+    /** Manual opt-in: public launcher only, never a chat-specific route. */
+    fun isLauncherControlEnabled(context: Context): Boolean =
+        prefs(context).getBoolean("launcher_control", false)
+
+    fun setLauncherControlEnabled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean("launcher_control", value).apply()
+    }
+
     fun iconChoice(context: Context): String =
         prefs(context).getString(KEY_ICON, ICON_WECHAT) ?: ICON_WECHAT
 
