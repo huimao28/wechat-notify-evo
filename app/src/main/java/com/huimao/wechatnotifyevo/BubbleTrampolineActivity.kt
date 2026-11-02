@@ -69,7 +69,7 @@ class BubbleTrampolineActivity : Activity() {
             if (!forwarded) {
                 Log.w(TAG, "Forward timeout, send never ran")
             } else {
-                Log.w(TAG, "Forward timeout, target never appeared")
+                Log.w(TAG, "Forward timeout after send; target state unknown")
             }
             Toast.makeText(this, "未能打开微信界面", Toast.LENGTH_SHORT).show()
             finish()
@@ -88,6 +88,7 @@ class BubbleTrampolineActivity : Activity() {
             setTextColor(Color.BLACK)
         }
         setContentView(tv)
+        Log.i(TAG, "experiment=activity_context sdk=${Build.VERSION.SDK_INT} task=$taskId display=${windowManager.defaultDisplay.displayId} multiWindow=$isInMultiWindowMode")
         handler.postDelayed(fallback, FALLBACK_DELAY_MS)
     }
 
@@ -100,22 +101,22 @@ class BubbleTrampolineActivity : Activity() {
     override fun onPause() {
         super.onPause()
         resumed = false
+        Log.i(TAG, "onPause forwarded=$forwarded (not proof of target)")
         handler.removeCallbacks(forwardRunnable)
         handler.removeCallbacks(fallback)
         forwardScheduled = false
-        // Target came up (or the user left): exit.
+        // The target may have appeared, or the user may have left; exit.
         finish()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        Log.i(TAG, "focus=$hasFocus forwarded=$forwarded (not proof of target)")
         if (hasFocus) {
             scheduleForward()
         } else if (forwarded) {
-            // Target opened fullscreen underneath the bubble: the bubble
-            // floats on top, so this never pauses, but focus moves to
-            // the fullscreen app. Exit silently — no failure Toast for
-            // a success.
+            // A focus change has several causes, including another window or
+            // user action. Keep the existing cleanup, without claiming success.
             handler.removeCallbacks(fallback)
             finish()
         }
@@ -134,7 +135,7 @@ class BubbleTrampolineActivity : Activity() {
         val nid = intent.getIntExtra(EXTRA_NID, -1)
         val pi = if (nid != -1) ConversationStore.get(nid)?.contentIntent else null
         if (pi == null) {
-            Log.w(TAG, "No content intent for nid=$nid")
+            Log.w(TAG, "No live content intent")
             finish()
             return
         }
@@ -146,7 +147,9 @@ class BubbleTrampolineActivity : Activity() {
                         ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
                     )
                 }
-                pi.send(null, 0, null, null, null, null, options.toBundle())
+                // AOSP uses a non-null context to supply caller display, not
+                // necessarily an Activity task token. This is an experiment.
+                pi.send(this, 0, null, null, null, null, options.toBundle())
                 Log.d(TAG, "Content intent send returned (sender BAL opt-in)")
             } else {
                 pi.send()
