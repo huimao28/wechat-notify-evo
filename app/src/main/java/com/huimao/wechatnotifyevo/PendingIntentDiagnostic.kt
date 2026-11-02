@@ -1,6 +1,10 @@
 package com.huimao.wechatnotifyevo
 
+import android.app.Activity
+import android.app.ActivityOptions
 import android.app.PendingIntent
+import android.os.Build
+import android.os.SystemClock
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -13,40 +17,50 @@ object PendingIntentDiagnostic {
     private const val TAG = "WNE.PendingProbe"
     private const val TIMEOUT_MS = 5_000L
 
-    data class Result(val nid: Int, val status: String, val mainUserPresent: Boolean?, val elapsedMs: Long)
+    data class Result(val status: String, val elapsedMs: Long)
 
-    fun send(
-        pi: PendingIntent,
-        nid: Int,
-        onResult: (Result) -> Unit,
-    ) {
-        val started = System.currentTimeMillis()
-        val done = AtomicBoolean(false)
+    /** Only invoke from an explicit user click in a visible Activity. */
+    fun send(activity: Activity, pi: PendingIntent, onResult: (Result) -> Unit) {
+        val started = SystemClock.elapsedRealtime()
+        val callbackArrived = AtomicBoolean(false)
         val handler = Handler(Looper.getMainLooper())
-        fun finish(status: String, present: Boolean?) {
-            if (!done.compareAndSet(false, true)) return
-            handler.removeCallbacksAndMessages(null)
-            val elapsed = System.currentTimeMillis() - started
-            // Never log the Intent, extras, usernames, or notification text.
-            Log.i(TAG, "nid=$nid status=$status mainUserPresent=$present elapsedMs=$elapsed")
-            onResult(Result(nid, status, present, elapsed))
+        fun report(status: String) {
+            val elapsed = SystemClock.elapsedRealtime() - started
+            // No notification/session identifiers, payload, result data or exception messages.
+            Log.i(TAG, "status=$status elapsedMs=$elapsed")
+            onResult(Result(status, elapsed))
         }
-        handler.postDelayed({ finish("timeout", null) }, TIMEOUT_MS)
+        val timeout = Runnable {
+            if (!callbackArrived.get()) report("callback_not_observed_within_5s")
+        }
         try {
-            pi.send(null, 0, null, object : PendingIntent.OnFinished {
+            val options = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ActivityOptions.makeBasic().apply {
+                    setPendingIntentBackgroundActivityStartMode(
+                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                    )
+                }.toBundle()
+            } else null
+            report("send_started")
+            pi.send(activity, 0, null, object : PendingIntent.OnFinished {
                 override fun onSendFinished(
-                    pendingIntent: PendingIntent?, intent: Intent?, resultCode: Int, resultData: String?, resultExtras: Bundle?
+                    pendingIntent: PendingIntent?, intent: Intent?, resultCode: Int,
+                    resultData: String?, resultExtras: Bundle?
                 ) {
-                    // Check only presence; never log values or intent contents.
-                    val present = intent?.hasExtra("Main_User") == true || resultExtras?.containsKey("Main_User") == true
-                    finish("callback", present)
+                    // Deliberately never inspect any callback payload, even key presence.
+                    callbackArrived.set(true)
+                    handler.removeCallbacks(timeout)
+                    report("callback_arrived") // Also records callbacks later than five seconds.
                 }
-            }, handler)
+            }, handler, null, options)
+            report("send_returned") // Not proof that a target UI or conversation appeared.
+            if (!callbackArrived.get()) handler.postDelayed(timeout, TIMEOUT_MS)
         } catch (e: PendingIntent.CanceledException) {
-            finish("canceled", null)
+            handler.removeCallbacks(timeout)
+            report("send_exception:${e.javaClass.name}")
         } catch (e: RuntimeException) {
-            Log.w(TAG, "send failed exceptionType=${e.javaClass.name}")
-            finish("failed:${e.javaClass.simpleName}", null)
+            handler.removeCallbacks(timeout)
+            report("send_exception:${e.javaClass.name}")
         }
     }
 }

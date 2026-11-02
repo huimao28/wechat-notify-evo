@@ -15,13 +15,12 @@ import android.widget.Toast
 /**
  * Bubble trampoline: a shortcut-based bubble launches the shortcut intent
  * into the bubble window, and that intent is this activity. Once resumed
- * it forwards WeChat's own content intent for the conversation — the same
- * intent tapping the evolved notification sends, so it opens the exact
- * chat, not WeChat main. No username learning is involved: learning the
- * username via contentIntent.send + OnFinished produces nothing on
- * Android 17 (the background send's callback never fires, WNE.Shortcuts
- * log stays empty), so the shortcut would otherwise stay on the WeChat
- * launcher intent.
+ * it forwards WeChat's own content PendingIntent, as a notification tap does.
+ * Its creator controls the destination; neither send() returning nor
+ * OnFinished proves that an exact chat appeared. OnFinished is a completion
+ * callback, not a public contract for discovering private conversation routes.
+ * Earlier missing callbacks alone cannot identify the cause or establish an
+ * Android-version limitation. The optional direct launcher mode is separate.
  *
  * The live content intent is looked up by nid at tap time. Only the nid
  * travels in the shortcut intent: shortcut intents are persisted by the

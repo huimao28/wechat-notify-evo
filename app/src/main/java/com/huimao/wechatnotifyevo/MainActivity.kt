@@ -261,8 +261,15 @@ private fun EvoScreen() {
                 probeResult = "没有可测试的活跃会话"
             } else {
                 probeResult = "测试中…仅在用户点击后发送原始入口"
-                PendingIntentDiagnostic.send(pi, conv.nid) { result ->
-                    probeResult = "nid=${result.nid} 状态=${result.status} Main_User存在=${result.mainUserPresent} 耗时=${result.elapsedMs}ms"
+                val activity = generateSequence(context) {
+                    (it as? android.content.ContextWrapper)?.baseContext
+                }.filterIsInstance<android.app.Activity>().firstOrNull()
+                if (activity == null) {
+                    probeResult = "未找到 Activity；未发送"
+                } else {
+                    PendingIntentDiagnostic.send(activity, pi) { result ->
+                        probeResult = "状态=${result.status} 耗时=${result.elapsedMs}ms（不代表会话定位成功）"
+                    }
                 }
             }
         }) {
