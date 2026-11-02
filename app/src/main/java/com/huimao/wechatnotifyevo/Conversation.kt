@@ -27,6 +27,26 @@ class Conversation(val nid: Int) {
     var smallIcon: Icon? = null
     var largeIcon: Icon? = null
     var contentIntent: PendingIntent? = null
+    // A fresh opaque generation for every notification snapshot, never a chat identifier.
+    var snapshotToken: String = java.util.UUID.randomUUID().toString()
+    var notificationKey: String? = null
+    var notificationPostTime: Long = 0L
+    var learnedMainUser: String? = null
+    var learningStatus: String = "尚未学习当前通知"
+
+    fun isCurrentSnapshot(token: String, key: String?, pi: PendingIntent?): Boolean =
+        ConversationStore.get(nid) === this && snapshotToken == token &&
+            notificationKey == key && key != null && contentIntent === pi
+
+    fun replaceSnapshot(key: String, postTime: Long, pi: PendingIntent?) {
+        snapshotToken = java.util.UUID.randomUUID().toString()
+        notificationKey = key
+        notificationPostTime = postTime
+        contentIntent = pi
+        learnedMainUser = null
+        learningStatus = "新通知快照：需手动学习；不会复用旧标识"
+        shortcutPushed = false
+    }
     /**
      * Whether a shortcut is currently published for this conversation.
      * ShortcutManager rate-limits apps that push too often, so a push is

@@ -60,29 +60,55 @@
   `gradle/actions/setup-gradle` 直接跑 `gradle assembleDebug` 并上传 APK
   artifact。本仓库故意不带 `gradle-wrapper.jar`，不要用 `./gradlew`。
 
-## 测试分支：Main_User 最小检查
+## 测试分支：手动学习当前会话后直接 launcher
 
-`feature/custom-notification-icon` 保留现有消息气泡及 launcher 对照模式；
-本次只扩展手动诊断，不改变气泡路由，不自动学习或收集会话标识。
+`feature/custom-notification-icon`：用户已确认 OnFinished 中 Main_User 为非空 String；
+这只证明可取值，不证明路由或气泡内嵌成功。本实现仍需真机验收。
 
-- 在应用前台点击“诊断：检查 Main_User（三项布尔值）”，发送最新活跃会话的原始
-  PendingIntent；仍使用 Activity context 和 Android 14+ BAL opt-in，可能打开微信。
-- 仅在该次 `OnFinished` 回调中检查 `intent` 的 `Main_User`：是否存在、值是否为
-  String、是否为非空字符串。只读取这一键，不枚举/读取其他字段，也不读取
-  resultData/resultExtras。实际值仅用于回调内瞬时判断，不显示、不日志、不保存、不用于跳转。
-- 三项结果只在当前界面内存中显示；诊断日志仍仅包含状态和耗时。
-  缺键或 null intent 为 false/false/false；存在但为 null 或非 String 为 true/false/false；
-  空 String 为 true/true/false；非空 String 为 true/true/true（空白字符串也算非空）。
-  读取异常显示 `callback_arrived_main_user_check_failed`，不伪装成三个 false。
-- 5 秒未收到回调仅提示 `callback_not_observed_within_5s`，不等于键不存在；晚到回调仍更新。
-  `send_returned` 不覆盖已到达的回调结果。回调及三个 true 均不证明会话定位或气泡嵌入成功。
+### 操作与路由
 
-安装测试：从本分支 Android CI 的 `WeChatNotifyEvo-debug` artifact 取得 APK，
-尝试覆盖已有测试版；如签名不兼容，请停止，不要为此直接卸载丢失数据。
-确认通知使用权/通知权限，收到一条新的微信通知后，返回本应用并手动点击上述按钮。
-若打开微信，手动返回本应用查看状态、耗时和三项布尔值；只反馈这几项，勿提供实际标识。
-没有活跃会话时不会发送。测试后可检查原有气泡及 launcher 开关行为未改变。
-本次构建为 debug 测试产物，不发布 Release、不改 main；新增检查的真机结果需另行验证。
+1. 收到微信通知，打开本应用。点击“手动学习会话（会打开微信）”，再选择具体会话。
+   仅这次明确手势发送一次该通知的原始 PendingIntent；无通知不发送，不随每条消息自动发送。
+   使用 Activity context、Android 14+ sender BAL opt-in 和公开 API。
+2. OnFinished 只读取 Main_User，并要求非空 String；不读取 resultData/resultExtras。
+   回调、会话对象、通知 key、通知代号及当前 PI 均匹配才接受；5 秒超时、失效或迟到回调丢弃。
+3. 手动返回本应用，开启“实验：直接 launcher 对照”，点击“刷新当前通知 / shortcut”。
+   已学习时使用导出、启用且不受权限保护的 `com.tencent.mm.ui.LauncherUI`，
+   参数 `Main_User=<所学值>`、`Intro_Is_Muti_Talker=false`（参照 Nevolution）。
+   无学习结果时保留原首页 launcher 对照；关闭开关恢复旧中转；LauncherUI 不可用则回退中转。
+4. 状态区区分已学习待刷新、发布成功待验证、系统限流及更新失败。
+   限流时不挂接参数不匹配的旧 shortcut，不循环重试、不重发 PI；稍后手动刷新。
+   关闭旧气泡，再从当前通知打开新气泡，确认是否是所选会话，以及是否确实在气泡内。
+
+### 隐私与防误绑边界
+
+- App 不显示、记录日志或上传 Main_User，不写数据库/偏好文件。会话映射只在进程内存。
+  **为让系统直接启动微信，Main_User 必须作为 shortcut Intent extra 交给 Android，
+  因而由系统在本机保存，不能声称整个方案完全不落盘。** Launcher/系统可访问快捷方式。
+- 保守选择：**每个新通知快照都会使学习失效，即便 nid、标题、key 相同也不复用**。
+  需在当前快照重新手动学习；优先用“刷新”测试，不要主动发新消息作为刷新方法。
+  若打开微信后原通知被微信移除，学习会被拒绝/失效，等待新通知重新学习，绝不猜测关联。
+- shortcut ID 使用随机快照代号，不以 nid 或标题复用。旧中转也核对快照代号，
+  防止旧气泡因 nid 复用转发到新会话。代价是会话级系统偏好/旧气泡不保证跨快照延续，
+  高频消息可能触发系统 shortcut 限流；基础消息通知保持工作。
+- 通知移除、替换或“清除学习结果”会请求禁用并删除旧本地 shortcut；
+  启动、监听重连及刷新会清理无内存对应项的 shortcut。进程重启后不恢复学习。
+  系统清理失败时只记录通用状态并在后续刷新重试；已经打开的旧气泡仍应手动关闭。
+  直接交给系统的 Intent 无法由本应用在每次点击时重新拦截验证。
+
+### 验收矩阵
+
+- 分别单聊、群聊学习并刷新：确认开的是所选会话，不只是首页；区分全屏与气泡内嵌。
+- 不学习时直接 launcher 仍是首页；关闭该模式仍走原通知中转。
+- 无通知、取消选择、PI 失效、缺键/非 String/空值、5 秒超时均不生成学习绑定。
+- 学习途中更新/移除通知，或先后出现同标题会话：旧回调不得绑定新快照。
+- 学习后收到新消息、清空通知、清除学习或重启进程：旧学习不复用。
+- 限流/发布失败后不误用旧参数；稍后仅刷新即可重试当前仍有效的学习结果。
+- CI 执行 `testDebugUnitTest assembleDebug`，覆盖快照代际、key、对象身份、
+  同标题 nid 复用、删除和进程内存清空。回调/系统限流/UI 行为仍需真机测试。
+
+仅构建 debug，不发布 Release、不改 main。覆盖安装若签名冲突则停止，不要直接卸载丢失数据。
+反馈模式、状态文字、是否正确会话及是否气泡内嵌即可，不要反馈实际 Main_User。
 
 ## 致谢与来源
 

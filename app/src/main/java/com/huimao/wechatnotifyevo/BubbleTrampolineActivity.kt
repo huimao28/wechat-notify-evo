@@ -132,7 +132,10 @@ class BubbleTrampolineActivity : Activity() {
 
     private fun forward() {
         val nid = intent.getIntExtra(EXTRA_NID, -1)
-        val pi = if (nid != -1) ConversationStore.get(nid)?.contentIntent else null
+        val conv = ConversationStore.get(nid)
+        val pi = conv?.takeIf {
+            intent.getStringExtra("snapshot") == it.snapshotToken
+        }?.contentIntent
         if (pi == null) {
             Log.w(TAG, "No live content intent")
             finish()

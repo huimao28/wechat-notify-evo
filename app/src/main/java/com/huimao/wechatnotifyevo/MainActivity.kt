@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationFactory.ensureChannels(this)
+        ConversationShortcuts.pruneOrphans(this)
         setContent {
             MaterialTheme(
                 colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
@@ -74,7 +75,7 @@ private fun EvoScreen() {
     var bubbleEnabled by remember { mutableStateOf(Prefs.isBubbleEnabled(context)) }
     var launcherControl by remember { mutableStateOf(Prefs.isLauncherControlEnabled(context)) }
     var showIconDialog by remember { mutableStateOf(false) }
-    var probeResult by remember { mutableStateOf<String?>(null) }
+    var learningChoices by remember { mutableStateOf<List<Pair<Conversation, String>>?>(null) }
 
     fun refresh() {
         listenerGranted = isListenerGranted(context)
@@ -179,7 +180,7 @@ private fun EvoScreen() {
         }
         SwitchRow(
             label = "实验：直接 launcher 对照（默认关闭）",
-            desc = "仅测试微信首页入口，不保证对应聊天或气泡展示。关闭恢复原通知中转；切换后请关闭旧气泡再测试。",
+            desc = "未学习时打开微信首页；手动学习当前会话后尝试直达。关闭恢复原通知中转；切换后请关闭旧气泡并刷新。仍需真机验证。",
             checked = launcherControl
         ) {
             launcherControl = it
@@ -257,35 +258,38 @@ private fun EvoScreen() {
                 }
             )
         }
-        Button(onClick = {
-            val conv = ConversationStore.all().maxByOrNull { it.messages.maxOfOrNull { m -> m.timestamp } ?: 0L }
-            val pi = conv?.contentIntent
-            if (conv == null || pi == null) {
-                probeResult = "没有可测试的活跃会话"
-            } else {
-                probeResult = "测试中…仅在用户点击后发送原始入口"
-                val activity = generateSequence(context) {
-                    (it as? android.content.ContextWrapper)?.baseContext
-                }.filterIsInstance<android.app.Activity>().firstOrNull()
-                if (activity == null) {
-                    probeResult = "未找到 Activity；未发送"
-                } else {
-                    PendingIntentDiagnostic.send(activity, pi) { result ->
-                        // Preserve an already received callback if send returns afterwards.
-                        if (result.status != "send_returned" || probeResult?.startsWith("状态=callback_") != true) {
-                            probeResult = "状态=${result.status} 耗时=${result.elapsedMs}ms（不代表会话定位成功）" +
-                                (result.mainUser?.let {
-                                    "\nMain_User：存在=${it.present}；类型为 String=${it.isString}；非空字符串=${it.nonEmpty}"
-                                } ?: "\nMain_User：尚无可用检查结果")
+        Button(enabled = !ManualConversationLearning.busy, onClick = {
+            learningChoices = ConversationStore.all().filter { it.contentIntent != null }
+                .sortedByDescending { it.notificationPostTime }.map { it to it.snapshotToken }
+        }) { Text("手动学习会话（会打开微信）") }
+        learningChoices?.let { choices ->
+            AlertDialog(
+                onDismissRequest = { learningChoices = null },
+                title = { Text("选择会话并打开微信") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        Text("点击下方会话会发送一次该通知原始入口并打开微信。只读取回调 Main_User；返回后请刷新 shortcut。")
+                        if (choices.isEmpty()) Text("没有当前通知，请等待新通知后再试。")
+                        choices.forEach { (conv, token) ->
+                            TextButton(onClick = {
+                                learningChoices = null
+                                val activity = generateSequence(context) {
+                                    (it as? android.content.ContextWrapper)?.baseContext
+                                }.filterIsInstance<android.app.Activity>().firstOrNull()
+                                if (activity != null) ManualConversationLearning.learn(activity, conv, token)
+                            }) { Text("学习并打开：${conv.title}") }
                         }
                     }
-                }
-            }
-        }) {
-            Text("诊断：检查 Main_User（三项布尔值）")
+                },
+                confirmButton = { TextButton(onClick = { learningChoices = null }) { Text("取消") } }
+            )
         }
-        probeResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        Text("仅手动触发原始入口，可能打开微信。回调只检查 Main_User 是否存在、是否 String、是否非空；不显示或保存实际值，不读取其他字段，不自动收集或按检查结果跳转。5 秒未收到回调会提示，晚到仍更新。", style = MaterialTheme.typography.bodySmall)
+        Text(ManualConversationLearning.status, style = MaterialTheme.typography.bodySmall)
+        Button(enabled = !ManualConversationLearning.busy, onClick = {
+            ManualConversationLearning.refresh(context)
+        }) { Text("刷新当前通知 / shortcut（不打开微信）") }
+        TextButton(onClick = { ManualConversationLearning.forget(context) }) { Text("清除学习结果") }
+        Text("学习映射仅在内存；用于直达的 Main_User 会随 shortcut 保存在系统本机，不显示、不日志、不上传。新通知快照、移除或进程重启后不复用，需重新学习。学习后开启直接 launcher 并刷新；限流请稍后刷新。5 秒超时及失效回调均丢弃。直达聊天及气泡嵌入仍待真机验证。", style = MaterialTheme.typography.bodySmall)
         Button(onClick = {
             NotificationListenerService.requestRebind(
                 ComponentName(context, WeChatListenerService::class.java)

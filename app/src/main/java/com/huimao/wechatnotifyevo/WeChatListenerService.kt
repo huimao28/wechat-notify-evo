@@ -72,6 +72,13 @@ class WeChatListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         NotificationFactory.ensureChannels(this)
+        ConversationShortcuts.pruneOrphans(this)
+    }
+
+    override fun onListenerDisconnected() {
+        // Missed updates make every captured snapshot untrustworthy.
+        cancelAll(this)
+        super.onListenerDisconnected()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -102,7 +109,11 @@ class WeChatListenerService : NotificationListenerService() {
             return
         }
 
+        // Never reuse a learned target across notification snapshots, even if
+        // WeChat reuses both nid and title. Retire the previous shortcut first.
+        ConversationStore.get(sbn.id)?.let { ConversationShortcuts.remove(this, it.nid) }
         val conv = ConversationStore.getOrCreate(sbn.id, title)
+        conv.replaceSnapshot(sbn.key, sbn.postTime, n.contentIntent)
         conv.title = title
         conv.smallIcon = n.smallIcon
         // Keep the last known avatar: WeChat posts no large icon for a
@@ -193,8 +204,9 @@ class WeChatListenerService : NotificationListenerService() {
         // WeChat itself removed the notification (read in-app, clicked, or
         // otherwise dismissed): drop our evolved copy too.
         val conv = ConversationStore.get(sbn.id) ?: return
-        ConversationStore.remove(sbn.id)
+        if (conv.notificationKey != sbn.key || conv.notificationPostTime != sbn.postTime) return
         ConversationShortcuts.remove(this, sbn.id)
+        ConversationStore.remove(sbn.id)
         val nm = notificationManager(this) ?: return
         nm.cancel(conv.nid)
         refreshSummaries(this)
