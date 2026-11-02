@@ -1,7 +1,9 @@
 package com.huimao.wechatnotifyevo
 
 import android.app.Activity
+import android.app.ActivityOptions
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,7 +15,6 @@ import android.widget.Toast
 /**
  * Bubble trampoline: a shortcut-based bubble launches the shortcut intent
  * into the bubble window, and that intent is this activity. Once resumed
- * and focused (truly foreground, so the send is not background-blocked)
  * it forwards WeChat's own content intent for the conversation — the same
  * intent tapping the evolved notification sends, so it opens the exact
  * chat, not WeChat main. No username learning is involved: learning the
@@ -138,13 +139,25 @@ class BubbleTrampolineActivity : Activity() {
             return
         }
         try {
-            pi.send()
-            Log.d(TAG, "Forwarded content intent for nid=$nid")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Grant only this user-triggered send our sender-side BAL privileges.
+                val options = ActivityOptions.makeBasic().apply {
+                    setPendingIntentBackgroundActivityStartMode(
+                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                    )
+                }
+                pi.send(null, 0, null, null, null, null, options.toBundle())
+                Log.d(TAG, "Content intent send returned (sender BAL opt-in)")
+            } else {
+                pi.send()
+                Log.d(TAG, "Content intent send returned (legacy)")
+            }
+            // Returning from send does not prove the target activity appeared.
             // Do not finish here: see the class comment.
         } catch (e: Exception) {
             // CanceledException included: any send failure must surface
             // instead of leaving a black window behind.
-            Log.w(TAG, "Forward failed for nid=$nid", e)
+            Log.w(TAG, "Content intent send failed: ${e.javaClass.simpleName}")
             Toast.makeText(this, "未能打开微信界面", Toast.LENGTH_SHORT).show()
             finish()
         }
