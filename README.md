@@ -60,6 +60,30 @@
   `gradle/actions/setup-gradle` 直接跑 `gradle assembleDebug` 并上传 APK
   artifact。本仓库故意不带 `gradle-wrapper.jar`，不要用 `./gradlew`。
 
+## 测试分支：Main_User 最小检查
+
+`feature/custom-notification-icon` 保留现有消息气泡及 launcher 对照模式；
+本次只扩展手动诊断，不改变气泡路由，不自动学习或收集会话标识。
+
+- 在应用前台点击“诊断：检查 Main_User（三项布尔值）”，发送最新活跃会话的原始
+  PendingIntent；仍使用 Activity context 和 Android 14+ BAL opt-in，可能打开微信。
+- 仅在该次 `OnFinished` 回调中检查 `intent` 的 `Main_User`：是否存在、值是否为
+  String、是否为非空字符串。只读取这一键，不枚举/读取其他字段，也不读取
+  resultData/resultExtras。实际值仅用于回调内瞬时判断，不显示、不日志、不保存、不用于跳转。
+- 三项结果只在当前界面内存中显示；诊断日志仍仅包含状态和耗时。
+  缺键或 null intent 为 false/false/false；存在但为 null 或非 String 为 true/false/false；
+  空 String 为 true/true/false；非空 String 为 true/true/true（空白字符串也算非空）。
+  读取异常显示 `callback_arrived_main_user_check_failed`，不伪装成三个 false。
+- 5 秒未收到回调仅提示 `callback_not_observed_within_5s`，不等于键不存在；晚到回调仍更新。
+  `send_returned` 不覆盖已到达的回调结果。回调及三个 true 均不证明会话定位或气泡嵌入成功。
+
+安装测试：从本分支 Android CI 的 `WeChatNotifyEvo-debug` artifact 取得 APK，
+尝试覆盖已有测试版；如签名不兼容，请停止，不要为此直接卸载丢失数据。
+确认通知使用权/通知权限，收到一条新的微信通知后，返回本应用并手动点击上述按钮。
+若打开微信，手动返回本应用查看状态、耗时和三项布尔值；只反馈这几项，勿提供实际标识。
+没有活跃会话时不会发送。测试后可检查原有气泡及 launcher 开关行为未改变。
+本次构建为 debug 测试产物，不发布 Release、不改 main；新增检查的真机结果需另行验证。
+
 ## 致谢与来源
 
 设计参考了 Nevolution 官方微信装饰器

@@ -16,6 +16,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -108,6 +110,7 @@ private fun EvoScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -268,15 +271,21 @@ private fun EvoScreen() {
                     probeResult = "未找到 Activity；未发送"
                 } else {
                     PendingIntentDiagnostic.send(activity, pi) { result ->
-                        probeResult = "状态=${result.status} 耗时=${result.elapsedMs}ms（不代表会话定位成功）"
+                        // Preserve an already received callback if send returns afterwards.
+                        if (result.status != "send_returned" || probeResult?.startsWith("状态=callback_") != true) {
+                            probeResult = "状态=${result.status} 耗时=${result.elapsedMs}ms（不代表会话定位成功）" +
+                                (result.mainUser?.let {
+                                    "\nMain_User：存在=${it.present}；类型为 String=${it.isString}；非空字符串=${it.nonEmpty}"
+                                } ?: "\nMain_User：尚无可用检查结果")
+                        }
                     }
                 }
             }
         }) {
-            Text("诊断：测试原始入口回调")
+            Text("诊断：检查 Main_User（三项布尔值）")
         }
         probeResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        Text("仅手动触发；可能打开微信。不会记录用户名、通知正文或 Intent 内容。超时：5 秒。", style = MaterialTheme.typography.bodySmall)
+        Text("仅手动触发原始入口，可能打开微信。回调只检查 Main_User 是否存在、是否 String、是否非空；不显示或保存实际值，不读取其他字段，不自动收集或按检查结果跳转。5 秒未收到回调会提示，晚到仍更新。", style = MaterialTheme.typography.bodySmall)
         Button(onClick = {
             NotificationListenerService.requestRebind(
                 ComponentName(context, WeChatListenerService::class.java)
