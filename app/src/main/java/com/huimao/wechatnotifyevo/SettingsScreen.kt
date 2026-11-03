@@ -69,7 +69,7 @@ private data class SettingsUiState(
     val bubbleEnabled: Boolean,
     val autoLearning: Boolean,
     val launcherControl: Boolean,
-    val iconChoice: Int,
+    val iconChoice: String,
     val hasCustomIcon: Boolean,
     val learningBusy: Boolean,
     val learningStatus: String,
@@ -84,7 +84,7 @@ private data class SettingsActions(
     val setBubbleEnabled: (Boolean) -> Unit = {},
     val setAutoLearning: (Boolean) -> Unit = {},
     val setLauncherControl: (Boolean) -> Unit = {},
-    val setIconChoice: (Int) -> Unit = {},
+    val setIconChoice: (String) -> Unit = {},
     val chooseCustomIcon: () -> Unit = {},
     val learnConversation: (Conversation, String) -> Unit = { _, _ -> },
     val refreshLearning: () -> Unit = {},
@@ -484,10 +484,10 @@ private fun AutoLearningRiskDialog(onConfirm: () -> Unit, onDismiss: () -> Unit)
 
 @Composable
 private fun IconChoiceDialog(
-    currentChoice: Int,
+    currentChoice: String,
     hasCustomIcon: Boolean,
     onChooseImage: () -> Unit,
-    onConfirm: (Int) -> Unit,
+    onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selected by rememberSaveable(currentChoice) { mutableStateOf(currentChoice) }
