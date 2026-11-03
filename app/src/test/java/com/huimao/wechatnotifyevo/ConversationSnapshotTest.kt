@@ -19,17 +19,17 @@ class ConversationSnapshotTest {
         assertFalse(c.isCurrentSnapshot("old-generation", "notification-key", null))
     }
 
-    @Test fun newSnapshotDropsLearningEvenForSameIdTitleAndKey() {
+    @Test fun continuousUpdateKeepsLearnedRouteButRejectsInflightSnapshot() {
         val c = current()
         val old = c.snapshotToken
         val shortcut = ConversationShortcuts.shortcutId(c.nid)
         c.learnedMainUser = "synthetic-test-value"
         c.shortcutPushed = true
         c.replaceSnapshot("notification-key", 2L, null)
-        assertNull(c.learnedMainUser)
-        assertFalse(c.shortcutPushed)
+        assertEquals("synthetic-test-value", c.learnedMainUser)
+        assertTrue(c.shortcutPushed)
         assertFalse(c.isCurrentSnapshot(old, "notification-key", null))
-        assertNotEquals(shortcut, ConversationShortcuts.shortcutId(c.nid))
+        assertEquals(shortcut, ConversationShortcuts.shortcutId(c.nid))
     }
 
     @Test fun removalAndSameTitleIdReuseCannotBindLateCallback() {
@@ -40,6 +40,7 @@ class ConversationSnapshotTest {
         assertNotSame(old, fresh)
         assertFalse(old.isCurrentSnapshot(generation, "notification-key", null))
         assertNotEquals(generation, fresh.snapshotToken)
+        assertNotEquals(old.routeToken, fresh.routeToken)
     }
 
     @Test fun changedTitleReplacesObject() {

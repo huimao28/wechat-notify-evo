@@ -74,6 +74,8 @@ private fun EvoScreen() {
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
     var bubbleEnabled by remember { mutableStateOf(Prefs.isBubbleEnabled(context)) }
     var launcherControl by remember { mutableStateOf(Prefs.isLauncherControlEnabled(context)) }
+    var autoLearning by remember { mutableStateOf(Prefs.isAutoLearningEnabled(context)) }
+    var confirmAutoLearning by remember { mutableStateOf(false) }
     var showIconDialog by remember { mutableStateOf(false) }
     var learningChoices by remember { mutableStateOf<List<Pair<Conversation, String>>?>(null) }
 
@@ -177,6 +179,29 @@ private fun EvoScreen() {
             for (conv in ConversationStore.all()) {
                 WeChatListenerService.repostConversation(context, conv, silent = true)
             }
+        }
+        SwitchRow(
+            label = "自动学习（实验）",
+            desc = "默认关闭。仅对启用后新会话尝试一次，会发送原微信通知 PendingIntent，可能拉起微信、影响未读状态；不是无感学习。失败不自动重试。",
+            checked = autoLearning
+        ) {
+            if (it) confirmAutoLearning = true else {
+                autoLearning = false
+                Prefs.setAutoLearningEnabled(context, false)
+            }
+        }
+        if (confirmAutoLearning) {
+            AlertDialog(
+                onDismissRequest = { confirmAutoLearning = false },
+                title = { Text("允许自动发送微信通知入口？") },
+                text = { Text("每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发。会发送原微信 PendingIntent，可能打开微信；不额外授予后台启动权限，系统可能拦截。5 秒无有效回调即放弃。开启前已有会话不会补学。直达仍需自行开启下方 launcher 对照。Main_User 仅在内存处理，但直达 shortcut 会由系统保存在本机，不日志、不上传。关闭立即阻止在途结果应用；不能撤回已发送入口。") },
+                confirmButton = { TextButton(onClick = {
+                    Prefs.setAutoLearningEnabled(context, true)
+                    autoLearning = true
+                    confirmAutoLearning = false
+                }) { Text("了解风险并开启") } },
+                dismissButton = { TextButton(onClick = { confirmAutoLearning = false }) { Text("取消") } }
+            )
         }
         SwitchRow(
             label = "实验：直接 launcher 对照（默认关闭）",
@@ -289,7 +314,7 @@ private fun EvoScreen() {
             ManualConversationLearning.refresh(context)
         }) { Text("刷新当前通知 / shortcut（不打开微信）") }
         TextButton(onClick = { ManualConversationLearning.forget(context) }) { Text("清除学习结果") }
-        Text("学习映射仅在内存；用于直达的 Main_User 会随 shortcut 保存在系统本机，不显示、不日志、不上传。新通知快照、移除或进程重启后不复用，需重新学习。学习后开启直接 launcher 并刷新；限流请稍后刷新。5 秒超时及失效回调均丢弃。直达聊天及气泡嵌入仍待真机验证。", style = MaterialTheme.typography.bodySmall)
+        Text("学习映射仅在内存；Main_User 随直达 shortcut 保存在系统本机，不显示、不日志、不上传。只在同一连续会话对象、相同 notification key 和源身份下复用；每条新消息仍废止旧的在途回调。移除、身份变化、监听断开、重启后清理映射和旧 shortcut。无法识别微信未报告的同名同 key 隐式换人，不能保证跨微信版本可靠。自动失败或跳过不会重试；旧气泡请手动关闭。关闭自动学习不清除已学结果，可用下方清除按钮。直达及气泡嵌入须真机验证。", style = MaterialTheme.typography.bodySmall)
         Button(onClick = {
             NotificationListenerService.requestRebind(
                 ComponentName(context, WeChatListenerService::class.java)

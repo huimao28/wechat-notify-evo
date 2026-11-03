@@ -58,6 +58,15 @@ object Prefs {
         prefs(context).edit().putBoolean("launcher_control", value).apply()
     }
 
+    fun isAutoLearningEnabled(context: Context): Boolean =
+        prefs(context).getBoolean("auto_learning_experiment", false)
+
+    fun setAutoLearningEnabled(context: Context, value: Boolean) {
+        // Invalidate even across a rapid off/on cycle, not just a preference read.
+        ManualConversationLearning.cancelPending()
+        prefs(context).edit().putBoolean("auto_learning_experiment", value).apply()
+    }
+
     fun iconChoice(context: Context): String =
         prefs(context).getString(KEY_ICON, ICON_WECHAT) ?: ICON_WECHAT
 

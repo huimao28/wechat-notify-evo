@@ -26,7 +26,7 @@ object ConversationShortcuts {
     private const val TAG = "WNE.Shortcuts"
 
     fun shortcutId(nid: Int): String = ConversationStore.get(nid)?.let {
-        "conv_${it.snapshotToken}"
+        "conv_${it.routeToken}"
     } ?: "conv_$nid"
 
     /** Public APIs only. No hidden PendingIntent introspection or private activity. */
@@ -161,7 +161,7 @@ object ConversationShortcuts {
         return Intent(context, BubbleTrampolineActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .putExtra(BubbleTrampolineActivity.EXTRA_NID, conv.nid)
-            .putExtra("snapshot", conv.snapshotToken)
+            .putExtra("snapshot", conv.routeToken)
     }
 
     private fun removeIds(context: Context, ids: List<String>): Boolean {
