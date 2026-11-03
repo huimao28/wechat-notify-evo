@@ -66,9 +66,7 @@ private data class SettingsUiState(
     val enabled: Boolean,
     val replyEnabled: Boolean,
     val groupEnabled: Boolean,
-    val bubbleEnabled: Boolean,
-    val autoLearning: Boolean,
-    val launcherControl: Boolean,
+    val directChatEnabled: Boolean,
     val iconChoice: String,
     val hasCustomIcon: Boolean,
     val learningBusy: Boolean,
@@ -81,9 +79,7 @@ private data class SettingsActions(
     val setEnabled: (Boolean) -> Unit = {},
     val setReplyEnabled: (Boolean) -> Unit = {},
     val setGroupEnabled: (Boolean) -> Unit = {},
-    val setBubbleEnabled: (Boolean) -> Unit = {},
-    val setAutoLearning: (Boolean) -> Unit = {},
-    val setLauncherControl: (Boolean) -> Unit = {},
+    val setDirectChatEnabled: (Boolean) -> Unit = {},
     val setIconChoice: (String) -> Unit = {},
     val chooseCustomIcon: () -> Unit = {},
     val learnConversation: (Conversation, String) -> Unit = { _, _ -> },
@@ -101,10 +97,8 @@ fun SettingsRoute() {
     var replyEnabled by remember { mutableStateOf(Prefs.isReplyEnabled(context)) }
     var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
-    var bubbleEnabled by remember { mutableStateOf(Prefs.isBubbleEnabled(context)) }
-    var launcherControl by remember { mutableStateOf(Prefs.isLauncherControlEnabled(context)) }
-    var autoLearning by remember { mutableStateOf(Prefs.isAutoLearningEnabled(context)) }
-    var confirmAutoLearning by rememberSaveable { mutableStateOf(false) }
+    var directChatEnabled by remember { mutableStateOf(Prefs.isDirectChatEnabled(context)) }
+    var confirmDirectChat by rememberSaveable { mutableStateOf(false) }
     var showIconDialog by rememberSaveable { mutableStateOf(false) }
     var learningChoices by remember { mutableStateOf<List<Pair<Conversation, String>>?>(null) }
 
@@ -150,9 +144,7 @@ fun SettingsRoute() {
         enabled = enabled,
         replyEnabled = replyEnabled,
         groupEnabled = groupEnabled,
-        bubbleEnabled = bubbleEnabled,
-        autoLearning = autoLearning,
-        launcherControl = launcherControl,
+        directChatEnabled = directChatEnabled,
         iconChoice = iconChoice,
         hasCustomIcon = CustomNotificationIcon.load(context) != null,
         learningBusy = ManualConversationLearning.busy,
@@ -168,14 +160,19 @@ fun SettingsRoute() {
         },
         setReplyEnabled = { replyEnabled = it; Prefs.setReplyEnabled(context, it) },
         setGroupEnabled = { groupEnabled = it; Prefs.setGroupEnabled(context, it) },
-        setBubbleEnabled = { bubbleEnabled = it; Prefs.setBubbleEnabled(context, it); repostConversations() },
-        setAutoLearning = {
-            if (it) confirmAutoLearning = true else {
-                autoLearning = false
-                Prefs.setAutoLearningEnabled(context, false)
+        setDirectChatEnabled = { requested ->
+            if (requested) {
+                confirmDirectChat = true
+            } else {
+                DirectChatTransition(
+                    writeLinkedFlags = { Prefs.setDirectChatEnabled(context, it) },
+                    cancelPendingLearning = ManualConversationLearning::cancelPending,
+                    cleanupLearnedRoutes = { ManualConversationLearning.forget(context) },
+                ).setEnabled(false)
+                directChatEnabled = false
+                repostConversations()
             }
         },
-        setLauncherControl = { launcherControl = it; Prefs.setLauncherControlEnabled(context, it); repostConversations() },
         setIconChoice = { iconChoice = it; Prefs.setIconChoice(context, it); repostConversations() },
         chooseCustomIcon = { imageLauncher.launch("image/*") },
         learnConversation = { conversation, token ->
@@ -200,13 +197,18 @@ fun SettingsRoute() {
         },
     )
 
-    if (confirmAutoLearning) AutoLearningRiskDialog(
+    if (confirmDirectChat) DirectChatRiskDialog(
         onConfirm = {
-            Prefs.setAutoLearningEnabled(context, true)
-            autoLearning = true
-            confirmAutoLearning = false
+            DirectChatTransition(
+                writeLinkedFlags = { Prefs.setDirectChatEnabled(context, it) },
+                cancelPendingLearning = ManualConversationLearning::cancelPending,
+                cleanupLearnedRoutes = { ManualConversationLearning.forget(context) },
+            ).setEnabled(true)
+            directChatEnabled = true
+            repostConversations()
+            confirmDirectChat = false
         },
-        onDismiss = { confirmAutoLearning = false },
+        onDismiss = { confirmDirectChat = false },
     )
     if (showIconDialog) IconChoiceDialog(
         currentChoice = iconChoice,
@@ -255,7 +257,7 @@ private fun SettingsScreen(
             item(span = { GridItemSpan(maxLineSpan) }) { IntroCard() }
             item { PermissionsSection(state, actions) }
             item { CoreSection(state, actions) }
-            item { ExperimentsSection(state, actions) }
+            item { DirectChatSection(state, actions) }
             item { AppearanceSection(state, onShowIconDialog) }
             item { DiagnosticsSection(state, actions, onShowLearningChoices) }
         }
@@ -301,35 +303,20 @@ private fun CoreSection(state: SettingsUiState, actions: SettingsActions) {
 }
 
 @Composable
-private fun ExperimentsSection(state: SettingsUiState, actions: SettingsActions) {
+private fun DirectChatSection(state: SettingsUiState, actions: SettingsActions) {
     SectionCard(
-        title = "气泡实验",
-        subtitle = "实验功能可能打开微信、影响未读状态，且受系统与微信版本限制",
-        warning = true,
+        title = "气泡聊天",
+        subtitle = "系统需允许本应用显示气泡；首次遇到新会话时可能短暂打开微信",
     ) {
         SwitchItem(
-            "消息气泡",
-            "向系统请求气泡；是否展示由系统决定，打开微信不代表聊天已嵌入气泡",
-            state.bubbleEnabled,
-            actions.setBubbleEnabled,
-        )
-        HorizontalDivider()
-        SwitchItem(
-            "自动学习（实验）",
-            "默认关闭。每个新会话最多尝试一次；可能拉起微信、影响未读状态，失败不会自动重试",
-            state.autoLearning,
-            actions.setAutoLearning,
-        )
-        HorizontalDivider()
-        SwitchItem(
-            "直接 launcher 对照（实验）",
-            "默认关闭。未学习时打开微信首页；学习后尝试直达。切换后需关闭旧气泡并刷新",
-            state.launcherControl,
-            actions.setLauncherControl,
+            "气泡内直达聊天",
+            "开启后自动学习新会话并通过系统气泡尝试直达；有限频，失败不会循环重试",
+            state.directChatEnabled,
+            actions.setDirectChatEnabled,
         )
         Text(
-            "风险提示：直达和气泡嵌入仍需真机验证；系统可能拦截后台启动。",
-            color = MaterialTheme.colorScheme.error,
+            "是否显示气泡及能否嵌入聊天由 Android、系统桌面与微信版本共同决定。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
@@ -389,7 +376,7 @@ private fun DiagnosticsSection(
                 Text("重新绑定监听服务")
             }
             Text(
-                "学习映射仅在内存；Main_User 随直达 shortcut 保存在系统本机，不显示、不记录日志、不上传。映射会在移除、身份变化、监听断开或重启后清理。自动失败或跳过不会重试；关闭自动学习不会清除已学结果。",
+                "学习映射仅在内存；Main_User 随直达 shortcut 保存在系统本机，不显示、不记录日志、不上传。映射会在移除、身份变化、监听断开、关闭气泡内直达聊天或重启后清理。自动失败或跳过不会重试。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
@@ -470,12 +457,12 @@ private fun SwitchItem(
 private fun transparentListItemColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
 
 @Composable
-private fun AutoLearningRiskDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun DirectChatRiskDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("允许自动发送微信通知入口？") },
+        title = { Text("开启气泡内直达聊天？") },
         text = {
-            Text("每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发。会发送原微信 PendingIntent，可能打开微信；系统也可能拦截。5 秒无有效回调即放弃。开启前已有会话不会补学。Main_User 仅在内存处理，但直达 shortcut 会由系统保存在本机，不记录日志、不上传。关闭会立即阻止在途结果应用，但不能撤回已发送入口。")
+            Text("开启后会同时启用系统气泡、自动学习和微信直达入口。每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发。首次遇到新会话可能短暂打开微信并影响未读状态；5 秒无有效回调即放弃。系统必须允许本应用显示气泡。Main_User 会随 shortcut 保存在系统本机，不记录日志、不上传。关闭会立即失效在途结果并清理相关 shortcut，但不能撤回已经发送的微信入口。")
         },
         confirmButton = { TextButton(onClick = onConfirm) { Text("了解风险并开启") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
@@ -586,9 +573,7 @@ private val previewState = SettingsUiState(
     enabled = true,
     replyEnabled = true,
     groupEnabled = true,
-    bubbleEnabled = false,
-    autoLearning = false,
-    launcherControl = false,
+    directChatEnabled = false,
     iconChoice = Prefs.ICON_DEFAULT,
     hasCustomIcon = false,
     learningBusy = false,

@@ -85,7 +85,7 @@ object ConversationShortcuts {
     }
 
     fun publish(context: Context, conv: Conversation) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !Prefs.isDirectChatEnabled(context)) return
         try {
             val sm = context.getSystemService(ShortcutManager::class.java) ?: return
             // Skip redundant pushes: ShortcutManager rate-limits apps that
@@ -130,10 +130,10 @@ object ConversationShortcuts {
             conv.shortcutPushed = isTargetPublished(context, conv)
             conv.learningStatus = when {
                 !conv.shortcutPushed -> "shortcut 尚未确认发布；请稍后刷新"
-                conv.learnedMainUser == null -> "未学习：当前为原通知中转或首页 launcher 对照"
-                !Prefs.isLauncherControlEnabled(context) -> "已学习；当前仍为中转模式，开启直接 launcher 后刷新"
+                conv.learnedMainUser == null -> "等待学习：当前入口仅打开微信首页"
+                !Prefs.isLauncherControlEnabled(context) -> "已学习；气泡内直达聊天未开启"
                 launch.component?.className != "com.tencent.mm.ui.LauncherUI" -> "已学习；LauncherUI 不可用，已回退中转"
-                else -> "已学习并发布会话 shortcut；关闭旧气泡后重开，是否直达仍待真机验证"
+                else -> "已学习并发布会话 shortcut；关闭旧气泡后可从当前通知重开"
             }
         } catch (e: RuntimeException) {
             // Conversation status is an enhancement: never let a shortcut

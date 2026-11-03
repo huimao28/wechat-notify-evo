@@ -165,7 +165,7 @@ object NotificationFactory {
         // Android 11+: shortcut target is normally our trampoline. The manual
         // launcher control uses only WeChat's public home entry, never chat extras.
         // Neither mode guarantees embedding; the system controls bubble display.
-        // A stale/missing target must not masquerade as the selected experiment.
+        // A stale or missing target must never receive bubble metadata.
         if (Prefs.isBubbleEnabled(context) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP) &&
