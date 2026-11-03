@@ -19,14 +19,14 @@ val releaseKeystoreType: String? = releaseKeystoreFile?.takeIf { it.exists() }?.
 
 android {
     namespace = "com.huimao.wechatnotifyevo"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.huimao.wechatnotifyevo"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 17
-        versionName = "1.0.16"
+        targetSdk = 35
+        versionCode = 19
+        versionName = "1.0.18"
     }
 
     signingConfigs {
@@ -65,6 +65,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)

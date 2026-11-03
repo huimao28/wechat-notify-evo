@@ -1,68 +1,68 @@
 # 微信通知进化（独立版）
 
-不依赖 Nevolution 主应用的微信通知进化工具。背景：Nevolution 主应用的
-`EnhancedNotificationListenerService` 在 Android 17 上 Binder 转发空指针，
-导致通知到不了微信装饰器插件，整个进化链路失效。本应用自己就是
-`NotificationListenerService`，彻底绕开那条已死的链路。
+不依赖 Nevolution 主应用的微信通知增强工具。本应用直接通过
+`NotificationListenerService` 监听微信通知，并以 `MessagingStyle` 重发。
 
 ## 工作原理
 
-1. 监听微信（`com.tencent.mm`）发出的通知。
-2. 按通知 id 归档会话：优先用通知自带的 `CarExtender` 未读会话
-   （权威消息列表 + 回复/已读 PendingIntent），没有则解析标题与正文。
-3. 取消微信原通知，用 framework `Notification.Builder` + `MessagingStyle`
-   以本应用自己的渠道重发，私聊 / 群聊 / 服务号分渠道、分组；
-   每组一条自己的 summary（只让子通知响铃），且只有当该组未读
-   总数达到 100 条时才出现，不满则只显示各会话自己的通知。
-4. 点开进化版通知走微信原生的 contentIntent；微信随后取消原通知时，
-   本应用同步取消进化版并清归档。
-
-## 权限用途
-
-- **通知使用权**：监听微信通知的唯一途径。没有它应用什么都不做。
-- **发送通知权限**（Android 13+）：发出进化版通知。
+1. 监听微信（`com.tencent.mm`）通知。
+2. 优先读取通知自带的 `CarExtender` 会话数据，没有时解析标题与正文。
+3. 取消微信原通知，按私聊、群聊和服务号分渠道重发进化版通知。
+4. 点击进化版通知仍使用微信原生 `contentIntent`；微信移除原通知时同步清理。
 
 ## 功能
 
-- 多消息会话：同一会话的多条消息聚合为 MessagingStyle 对话。
-- 会话优先级（Android 11+）：进化版通知以系统会话发布（长驻快捷
-  方式 + Person），长按通知或在系统设置里可按会话调优先 / 默认 /
-  静音；气泡暂不做。
-- 直接回复：通知上的“回复”按钮把输入转发给微信原生的回复入口
-  （car-extender reply PendingIntent）。
-- 标为已读：有 read PendingIntent 时提供该动作，点后通知微信已读并
-  清除进化版通知。
-- 开关：总开关、直接回复开关、群聊进化开关，以及“重新绑定监听服务”
-  （系统升级后监听绑定假死时用）。
+- 多条消息聚合为 MessagingStyle 会话。
+- 在微信提供入口时支持直接回复和标为已读。
+- 群聊进化、通知图标选择、监听服务诊断。
+- **气泡内直达聊天**：一个正式设置同时管理系统气泡、自动学习与微信公开
+  Launcher 直达入口。首次遇到新会话时可能短暂打开微信；学习有限频，失败不循环重试。
+- 旧版三个独立开关会自动迁移：仅当“消息气泡”“自动学习”“直接 launcher”
+  原先全部开启时，新总开关才开启；否则统一关闭，不影响通知进化、回复、群聊等核心功能。
 
-## 刻意不做的事
+## 气泡内直达聊天
 
-- 杂项通知（无 ticker，如网页登录确认）、进行中的通知（VoIP 等）
-  原样不动，不进化也不取消。
-- `REASON_LISTENER_CANCEL` 的移除回调会被忽略：那是我们自己取消
-  原通知触发的，不能因此清归档。
+开启时需先确认风险。应用对每个新会话最多学习一次，进程内至少间隔 60 秒、
+每小时最多 6 次；忙碌或限频时跳过且不补发。学习成功后，系统会话 shortcut
+使用微信公开且可导出的 `LauncherUI`，携带当前快照获得的 `Main_User` 尝试直达。
 
-## 已知限制（v1）
+关闭时会先失效在途学习回调，再原子关闭三个兼容偏好，并清除内存学习结果、
+禁用/移除相关 shortcut；已经发送给微信的入口无法撤回，已经打开的旧气泡可能仍需手动关闭。
+手动学习、刷新 shortcut、清除学习结果等入口保留在“诊断与学习”中。
 
-- 直接回复与标为已读依赖微信是否在通知里提供 car-extender 数据；
-  如果微信某版本不再提供，这两项就不会出现，但消息进化本身不受影响。
-- 群聊判定是启发式：正文里“发送者：内容”的发送者前缀不等于标题
-  时判定为群聊；服务号按固定标题表（服务通知、订阅号消息、微信团队、
-  微信支付）归类。
-- 会话归档只存在进程内存里，应用进程被杀后历史从下一条新通知重建。
-- v1 不做表情翻译（`[动画表情]` 这类原文照常显示）和气泡。
+### 隐私边界
 
-## 构建
+- App 不显示、记录日志或上传 `Main_User`，会话映射只保存在进程内存。
+- 为让系统直接启动微信，`Main_User` 必须作为 shortcut Intent extra 交给 Android，
+  因而会由 Launcher/系统保存在本机，不能视为完全不落盘。
+- shortcut 使用随机快照代号；通知替换、移除、关闭功能、监听断开或进程重启后不复用旧学习。
 
-- 本地：Android Studio 打开即可构建（minSdk 26、targetSdk 34、
-  compileSdk 34、AGP 8.7.3、Gradle 8.9、Compose BOM 2024.10.01）。
-- CI：仓库自带 `.github/workflows/android.yml`，用
-  `gradle/actions/setup-gradle` 直接跑 `gradle assembleDebug` 并上传 APK
-  artifact。本仓库故意不带 `gradle-wrapper.jar`，不要用 `./gradlew`。
+## 权限
+
+- **通知使用权**：监听和改写微信通知。
+- **发送通知权限**（Android 13+）：显示进化版通知。
+- 系统还必须允许本应用显示气泡；最终是否显示、是否在气泡窗口内承载微信界面，
+  由 Android、系统桌面和微信版本共同决定。
+
+## 已知限制（v1.0.18）
+
+- 首次遇到新会话时自动学习可能短暂打开微信并影响未读状态；系统也可能拦截后台启动。
+- 每个新会话只尝试一次，5 秒无有效回调即放弃；限频或失败不会自动补学。
+- 微信 `LauncherUI` 不可用时无法建立直达入口；shortcut 更新受系统限流。
+- Android/桌面可能把微信聊天全屏打开，而不是嵌入悬浮气泡；显示气泡不等于已嵌入聊天。
+- 直接回复与标为已读依赖微信提供 car-extender 数据；缺失时按钮不出现，但消息进化不受影响。
+- 群聊判定采用“发送者：内容”启发式；会话归档只存在进程内存；不翻译表情占位文本。
+- 正式签名与早期 debug 签名不兼容时无法覆盖安装，需用户自行备份并卸载旧版。
+
+## 构建与发布
+
+- 本地：Android Studio（minSdk 26、target/compileSdk 35、Java 17、Gradle 8.9）。
+- CI：`.github/workflows/android.yml` 对分支运行 `testDebugUnitTest assembleDebug` 并上传 debug APK。
+- Release：创建并推送 annotated tag `v*` 后，`.github/workflows/release.yml` 使用仓库 Secrets
+  解码正式 keystore、运行 `assembleRelease`，并将 `app-release.apk` 发布到对应 GitHub Release。
+- 仓库不带 `gradle-wrapper.jar`，CI 使用 `gradle/actions/setup-gradle` 安装 Gradle 8.9。
 
 ## 致谢与来源
 
-设计参考了 Nevolution 官方微信装饰器
-（`Nevolution/decorator-wechat`，Apache 2.0）里的会话归档、计数前缀
-剥离、`": "` 发送者切分、car-extender 回复转发等思路，但本应用是
-独立重写，不依赖 Nevolution SDK 与主应用。
+设计参考 Nevolution 官方微信装饰器（`Nevolution/decorator-wechat`，Apache 2.0）的
+会话归档、计数前缀、发送者切分和 car-extender 转发思路；本应用为独立重写。

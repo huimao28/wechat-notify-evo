@@ -9,9 +9,6 @@ import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
 import android.content.LocusId
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.os.Build
 
@@ -81,38 +78,13 @@ object NotificationFactory {
         else -> SUMMARY_ID_DIRECT
     }
 
-    /**
-     * Badge icon for evolved notifications. Default keeps WeChat's original
-     * notification small icon (or our own fallback when it is absent); the
-     * "wechat" choice uses WeChat's launcher icon (green logo) instead.
-     * A failed launcher-icon load falls back to the default, never crashes
-     * the listener path.
-     */
+    /** Small icon is shared with the status bar; shade rendering is system-controlled. */
     private fun smallIcon(context: Context, conv: Conversation?): Icon {
-        if (Prefs.iconChoice(context) == Prefs.ICON_WECHAT) {
-            wechatLauncherIcon(context)?.let { return it }
+        when (Prefs.iconChoice(context)) {
+            Prefs.ICON_WECHAT -> return Icon.createWithResource(context, R.drawable.ic_stat_wechat)
+            Prefs.ICON_CUSTOM -> CustomNotificationIcon.load(context)?.let { return it }
         }
         return conv?.smallIcon ?: Icon.createWithResource(context, R.drawable.ic_stat_message)
-    }
-
-    private fun wechatLauncherIcon(context: Context): Icon? {
-        return try {
-            val drawable = context.packageManager
-                .getApplicationIcon(WeChatListenerService.WECHAT_PACKAGE)
-            Icon.createWithBitmap(drawable.toBadgeBitmap())
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    /** Render any drawable (including adaptive icons) into a square bitmap. */
-    private fun Drawable.toBadgeBitmap(): Bitmap {
-        val size = 192
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        setBounds(0, 0, size, size)
-        draw(canvas)
-        return bitmap
     }
 
     /**
@@ -190,16 +162,14 @@ object NotificationFactory {
             builder.setShortcutId(ConversationShortcuts.shortcutId(conv.nid))
             builder.setLocusId(LocusId(ConversationShortcuts.shortcutId(conv.nid)))
         }
-        // Android 11+: system bubbles, Nevolution-style shortcut bubbles:
-        // the bubble references the conversation shortcut id, and the system
-        // launches the shortcut's intent (LauncherUI + Main_User, or the
-        // WeChat launcher as fallback) directly into the bubble window. No
-        // trampoline PendingIntent, so no mutability crash and no second-hop
-        // launch for the system to silently drop. Service notifications
-        // (BOT) do not bubble.
+        // Android 11+: shortcut target is normally our trampoline. The manual
+        // launcher control uses only WeChat's public home entry, never chat extras.
+        // Neither mode guarantees embedding; the system controls bubble display.
+        // A stale or missing target must never receive bubble metadata.
         if (Prefs.isBubbleEnabled(context) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP)
+            (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP) &&
+            ConversationShortcuts.isTargetPublished(context, conv)
         ) {
             builder.setBubbleMetadata(
                 Notification.BubbleMetadata.Builder(ConversationShortcuts.shortcutId(conv.nid))

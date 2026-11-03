@@ -16,6 +16,18 @@ import android.service.notification.StatusBarNotification
  * package and channels -> maintain one group summary per conversation type.
  */
 class WeChatListenerService : NotificationListenerService() {
+    private val ownRemovals = linkedSetOf<Pair<String, Long>>()
+
+    private fun replaceOriginal(sbn: StatusBarNotification) {
+        val marker = sbn.key to sbn.postTime
+        ownRemovals.add(marker)
+        // Bound stale markers if a vendor never delivers removal callbacks.
+        if (ownRemovals.size > 128) ownRemovals.remove(ownRemovals.first())
+        try { cancelNotification(sbn.key) } catch (e: RuntimeException) {
+            ownRemovals.remove(marker)
+            throw e
+        }
+    }
 
     companion object {
         const val WECHAT_PACKAGE = "com.tencent.mm"
@@ -72,6 +84,15 @@ class WeChatListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         NotificationFactory.ensureChannels(this)
+        ConversationShortcuts.pruneOrphans(this)
+    }
+
+    override fun onListenerDisconnected() {
+        // Missed updates make every captured snapshot untrustworthy.
+        ownRemovals.clear()
+        ManualConversationLearning.cancelPending()
+        cancelAll(this)
+        super.onListenerDisconnected()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -102,7 +123,17 @@ class WeChatListenerService : NotificationListenerService() {
             return
         }
 
+        // Never recover a mapping by title/nid. Reuse only this uninterrupted
+        // object with the same full key and (when supplied) source shortcut identity.
+        val identity = n.shortcutId
+        val previous = ConversationStore.get(sbn.id)
+        if (previous != null && (previous.title != title || !previous.continues(sbn.key, identity))) {
+            ConversationShortcuts.remove(this, previous.nid)
+            ConversationStore.remove(previous.nid)
+        }
+        ConversationShortcuts.pruneOrphans(this)
         val conv = ConversationStore.getOrCreate(sbn.id, title)
+        conv.replaceSnapshot(sbn.key, sbn.postTime, n.contentIntent, identity)
         conv.title = title
         conv.smallIcon = n.smallIcon
         // Keep the last known avatar: WeChat posts no large icon for a
@@ -171,7 +202,7 @@ class WeChatListenerService : NotificationListenerService() {
         // Replace the original with the evolved notification. Publish the
         // conversation shortcut first so the system links this notification
         // to it (Android 11+ conversation status).
-        cancelNotification(sbn.key)
+        replaceOriginal(sbn)
         val nm = notificationManager(this) ?: return
         ConversationShortcuts.publish(this, conv)
         nm.notify(
@@ -179,6 +210,7 @@ class WeChatListenerService : NotificationListenerService() {
             NotificationFactory.buildConversationNotification(this, conv, silent = false)
         )
         refreshSummaries(this)
+        ManualConversationLearning.considerAutomatic(this, conv)
     }
 
     override fun onNotificationRemoved(
@@ -189,12 +221,14 @@ class WeChatListenerService : NotificationListenerService() {
         if (sbn == null || sbn.packageName != WECHAT_PACKAGE) return
         // Our own cancelNotification() calls also arrive here; they must not
         // wipe the archive we just built the evolved notification from.
-        if (reason == REASON_LISTENER_CANCEL || reason == REASON_LISTENER_CANCEL_ALL) return
+        val own = ownRemovals.remove(sbn.key to sbn.postTime)
+        if (own && reason == REASON_LISTENER_CANCEL) return
         // WeChat itself removed the notification (read in-app, clicked, or
         // otherwise dismissed): drop our evolved copy too.
         val conv = ConversationStore.get(sbn.id) ?: return
-        ConversationStore.remove(sbn.id)
+        if (conv.notificationKey != sbn.key || conv.notificationPostTime != sbn.postTime) return
         ConversationShortcuts.remove(this, sbn.id)
+        ConversationStore.remove(sbn.id)
         val nm = notificationManager(this) ?: return
         nm.cancel(conv.nid)
         refreshSummaries(this)

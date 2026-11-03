@@ -1,5 +1,8 @@
 name: Release
 
+# Publishing contract: push an annotated v* tag after branch CI succeeds.
+# This workflow builds with the repository's release-signing secrets and attaches
+# the exact signed APK below to the matching non-draft GitHub Release.
 on:
   push:
     tags:
@@ -36,23 +39,20 @@ jobs:
           body: |
             微信通知进化正式签名版。
 
-            功能：
-            - 微信通知进化为 MessagingStyle 会话样式（Android 17 上可用，替代失效的 Nevolution）
-            - 汇总通知按组未读满 100 条才出现，不满只显示各会话自己的通知
-            - Android 11+ 会话优先级：进化版通知以系统会话发布，长按通知可按会话调优先 / 默认 / 静音
-            - 通知头像右下角角标默认使用微信启动器图标（绿色 logo），也可在应用内切回微信原始通知小图标
-            - 会话通知支持系统消息气泡（快捷方式气泡）：点气泡直达微信对应聊天；需在系统设置里允许本应用显示气泡
-            - v1.0.12：气泡不再学微信号（Android 17 上后台发 intent 回调不触发，学习日志为空，学不到号），改由快捷方式中转页转发微信原通知 intent 直达对应聊天；聊天可能以全屏打开而非悬浮窗口内，因为微信聊天界面只能由微信自己显示
-            - v1.0.13：中转 intent 不再带微信 PendingIntent（快捷方式持久化不支持该类型，可能导致快捷方式建不出来、气泡消失），只传会话 id，中转页按 id 查最新 intent
-            - v1.0.14：修气泡消失——中转 intent 没设 action，系统建快捷方式时抛 NullPointerException（日志实证），现设为 ACTION_VIEW；多发送者的群消息微信本身不给头像时，保留上一次的头像而不是回落应用图标
-            - v1.0.15：中转页改成不透明加载界面（透明窗口可能不被算作前台、转发会被系统拦，黑屏也无法区分原因）；转发失败统一弹提示并退出
-            - v1.0.16：中转转发改由恢复与获焦双触发（并等 300ms 让前台状态落稳），全屏打开导致失焦时静默退出，不再误报失败
+            v1.0.18：
+            - 将“消息气泡”“自动学习”“直接 launcher”合并为“气泡内直达聊天”正式设置
+            - 开启前显示风险确认，并原子联动三个兼容偏好
+            - 关闭时立即失效在途学习、清除学习结果并禁用/移除相关 shortcut
+            - 旧安装仅在原三项全部开启时迁移为开启，否则迁移为关闭
+            - 保留诊断中的手动学习、刷新和清理入口，设置界面采用 Material 3
 
             已知限制：
-            - 直接回复与标为已读依赖微信在通知里提供 car-extender 数据；当前版本微信不提供，故这两项不出现，但消息进化本身不受影响
-            - 群聊判定是启发式；会话归档只存在进程内存里，应用进程被杀后历史从下一条新通知重建
+            - 首次遇到新会话可能短暂打开微信并影响未读状态；每会话最多尝试一次，有限频且失败不补发
+            - 系统必须允许本应用显示气泡；是否显示以及微信聊天是否嵌入气泡由 Android、桌面和微信版本决定
+            - Main_User 会随直达 shortcut 保存在系统本机；应用不显示、不记录日志、不上传
+            - 直接回复/标为已读依赖微信 car-extender；群聊判定为启发式；会话归档只在进程内存
 
-            安装：下载 app-release.apk 安装，授予通知使用权（Android 13+ 还需通知权限）。
-            注意：本版起改用正式签名，无法直接覆盖安装 v1.0.0 的 debug 签名版，需先卸载旧版再装。
+            安装：下载 app-release.apk，授予通知使用权（Android 13+ 还需通知权限），并在系统中允许气泡。
+            若设备上是早期 debug 签名版，签名不同将无法覆盖安装。
           files: app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true

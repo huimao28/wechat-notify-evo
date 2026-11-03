@@ -80,13 +80,14 @@ class EvolutionActionReceiver : BroadcastReceiver() {
                 Log.w(TAG, "Read PendingIntent cancelled for nid=$nid")
             }
         }
+        ConversationShortcuts.remove(context, nid)
         ConversationStore.remove(nid)
         WeChatListenerService.cancelEvolved(context, nid)
     }
 
     private fun handleDelete(context: Context, nid: Int) {
-        ConversationStore.remove(nid)
         ConversationShortcuts.remove(context, nid)
+        ConversationStore.remove(nid)
         WeChatListenerService.refreshSummaries(context)
     }
 }
