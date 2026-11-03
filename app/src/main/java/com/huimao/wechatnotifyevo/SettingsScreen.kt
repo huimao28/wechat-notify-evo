@@ -1,0 +1,605 @@
+package com.huimao.wechatnotifyevo
+
+import android.Manifest
+import android.app.Activity
+import android.content.ComponentName
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import android.service.notification.NotificationListenerService
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+
+private data class SettingsUiState(
+    val listenerGranted: Boolean,
+    val postGranted: Boolean,
+    val showPostPermission: Boolean,
+    val enabled: Boolean,
+    val replyEnabled: Boolean,
+    val groupEnabled: Boolean,
+    val bubbleEnabled: Boolean,
+    val autoLearning: Boolean,
+    val launcherControl: Boolean,
+    val iconChoice: Int,
+    val hasCustomIcon: Boolean,
+    val learningBusy: Boolean,
+    val learningStatus: String,
+)
+
+private data class SettingsActions(
+    val openListenerSettings: () -> Unit = {},
+    val requestPostPermission: () -> Unit = {},
+    val setEnabled: (Boolean) -> Unit = {},
+    val setReplyEnabled: (Boolean) -> Unit = {},
+    val setGroupEnabled: (Boolean) -> Unit = {},
+    val setBubbleEnabled: (Boolean) -> Unit = {},
+    val setAutoLearning: (Boolean) -> Unit = {},
+    val setLauncherControl: (Boolean) -> Unit = {},
+    val setIconChoice: (Int) -> Unit = {},
+    val chooseCustomIcon: () -> Unit = {},
+    val learnConversation: (Conversation, String) -> Unit = { _, _ -> },
+    val refreshLearning: () -> Unit = {},
+    val forgetLearning: () -> Unit = {},
+    val rebindListener: () -> Unit = {},
+)
+
+@Composable
+fun SettingsRoute() {
+    val context = LocalContext.current
+    var listenerGranted by remember { mutableStateOf(false) }
+    var postGranted by remember { mutableStateOf(false) }
+    var enabled by remember { mutableStateOf(Prefs.isEnabled(context)) }
+    var replyEnabled by remember { mutableStateOf(Prefs.isReplyEnabled(context)) }
+    var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
+    var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
+    var bubbleEnabled by remember { mutableStateOf(Prefs.isBubbleEnabled(context)) }
+    var launcherControl by remember { mutableStateOf(Prefs.isLauncherControlEnabled(context)) }
+    var autoLearning by remember { mutableStateOf(Prefs.isAutoLearningEnabled(context)) }
+    var confirmAutoLearning by rememberSaveable { mutableStateOf(false) }
+    var showIconDialog by rememberSaveable { mutableStateOf(false) }
+    var learningChoices by remember { mutableStateOf<List<Pair<Conversation, String>>?>(null) }
+
+    fun refreshPermissions() {
+        listenerGranted = isListenerGranted(context)
+        postGranted = isPostGranted(context)
+    }
+    fun repostConversations() {
+        ConversationStore.all().forEach {
+            WeChatListenerService.repostConversation(context, it, silent = true)
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshPermissions() }
+
+    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val appContext = context.applicationContext
+            Thread {
+                val success = CustomNotificationIcon.import(appContext, uri)
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    if (success) {
+                        iconChoice = Prefs.ICON_CUSTOM
+                        Prefs.setIconChoice(appContext, iconChoice)
+                        showIconDialog = false
+                        ConversationStore.all().forEach {
+                            WeChatListenerService.repostConversation(appContext, it, silent = true)
+                        }
+                    } else {
+                        Toast.makeText(appContext, "图片无法导入，请选择不超过 10 MB 的有效图片", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }.start()
+        }
+    }
+    val postPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { refreshPermissions() }
+
+    val state = SettingsUiState(
+        listenerGranted = listenerGranted,
+        postGranted = postGranted,
+        showPostPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
+        enabled = enabled,
+        replyEnabled = replyEnabled,
+        groupEnabled = groupEnabled,
+        bubbleEnabled = bubbleEnabled,
+        autoLearning = autoLearning,
+        launcherControl = launcherControl,
+        iconChoice = iconChoice,
+        hasCustomIcon = CustomNotificationIcon.load(context) != null,
+        learningBusy = ManualConversationLearning.busy,
+        learningStatus = ManualConversationLearning.status,
+    )
+    val actions = SettingsActions(
+        openListenerSettings = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
+        requestPostPermission = { postPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+        setEnabled = {
+            enabled = it
+            Prefs.setEnabled(context, it)
+            if (!it) WeChatListenerService.cancelAll(context)
+        },
+        setReplyEnabled = { replyEnabled = it; Prefs.setReplyEnabled(context, it) },
+        setGroupEnabled = { groupEnabled = it; Prefs.setGroupEnabled(context, it) },
+        setBubbleEnabled = { bubbleEnabled = it; Prefs.setBubbleEnabled(context, it); repostConversations() },
+        setAutoLearning = {
+            if (it) confirmAutoLearning = true else {
+                autoLearning = false
+                Prefs.setAutoLearningEnabled(context, false)
+            }
+        },
+        setLauncherControl = { launcherControl = it; Prefs.setLauncherControlEnabled(context, it); repostConversations() },
+        setIconChoice = { iconChoice = it; Prefs.setIconChoice(context, it); repostConversations() },
+        chooseCustomIcon = { imageLauncher.launch("image/*") },
+        learnConversation = { conversation, token ->
+            val activity = context.findActivity()
+            if (activity != null) ManualConversationLearning.learn(activity, conversation, token)
+        },
+        refreshLearning = { ManualConversationLearning.refresh(context) },
+        forgetLearning = { ManualConversationLearning.forget(context) },
+        rebindListener = {
+            NotificationListenerService.requestRebind(ComponentName(context, WeChatListenerService::class.java))
+            Toast.makeText(context, "已请求重新绑定监听服务", Toast.LENGTH_SHORT).show()
+        },
+    )
+
+    SettingsScreen(
+        state = state,
+        actions = actions,
+        onShowIconDialog = { showIconDialog = true },
+        onShowLearningChoices = {
+            learningChoices = ConversationStore.all().filter { it.contentIntent != null }
+                .sortedByDescending { it.notificationPostTime }.map { it to it.snapshotToken }
+        },
+    )
+
+    if (confirmAutoLearning) AutoLearningRiskDialog(
+        onConfirm = {
+            Prefs.setAutoLearningEnabled(context, true)
+            autoLearning = true
+            confirmAutoLearning = false
+        },
+        onDismiss = { confirmAutoLearning = false },
+    )
+    if (showIconDialog) IconChoiceDialog(
+        currentChoice = iconChoice,
+        hasCustomIcon = state.hasCustomIcon,
+        onChooseImage = actions.chooseCustomIcon,
+        onConfirm = { actions.setIconChoice(it); showIconDialog = false },
+        onDismiss = { showIconDialog = false },
+    )
+    learningChoices?.let { choices ->
+        LearningChoicesDialog(
+            choices = choices,
+            onChoose = { conversation, token ->
+                learningChoices = null
+                actions.learnConversation(conversation, token)
+            },
+            onDismiss = { learningChoices = null },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsScreen(
+    state: SettingsUiState,
+    actions: SettingsActions,
+    onShowIconDialog: () -> Unit,
+    onShowLearningChoices: () -> Unit,
+) {
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("微信通知进化") }) },
+    ) { innerPadding ->
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 360.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .consumeWindowInsets(innerPadding),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = innerPadding.calculateTopPadding() + 8.dp,
+                end = 16.dp,
+                bottom = innerPadding.calculateBottomPadding() + 24.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) { IntroCard() }
+            item { PermissionsSection(state, actions) }
+            item { CoreSection(state, actions) }
+            item { ExperimentsSection(state, actions) }
+            item { AppearanceSection(state, onShowIconDialog) }
+            item { DiagnosticsSection(state, actions, onShowLearningChoices) }
+        }
+    }
+}
+
+@Composable
+private fun IntroCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("让微信通知更现代", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "直接监听并重发为 Messaging 样式，支持多消息会话、直接回复与标为已读。原微信通知会被取消，只保留进化版。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PermissionsSection(state: SettingsUiState, actions: SettingsActions) {
+    SectionCard("权限状态", "两项权限均就绪后才能稳定接收和发送通知") {
+        PermissionItem("通知使用权", state.listenerGranted, "允许读取并改写微信通知", actions.openListenerSettings)
+        if (state.showPostPermission) {
+            HorizontalDivider()
+            PermissionItem("发送通知", state.postGranted, "允许显示进化版通知", actions.requestPostPermission)
+        }
+    }
+}
+
+@Composable
+private fun CoreSection(state: SettingsUiState, actions: SettingsActions) {
+    SectionCard("核心功能") {
+        SwitchItem("总开关", "关闭后不再进化新通知，并清除已有进化版通知", state.enabled, actions.setEnabled)
+        HorizontalDivider()
+        SwitchItem("直接回复", "依赖微信在原通知中提供回复入口", state.replyEnabled, actions.setReplyEnabled)
+        HorizontalDivider()
+        SwitchItem("群聊进化", "关闭后群聊通知保持原样", state.groupEnabled, actions.setGroupEnabled)
+    }
+}
+
+@Composable
+private fun ExperimentsSection(state: SettingsUiState, actions: SettingsActions) {
+    SectionCard(
+        title = "气泡实验",
+        subtitle = "实验功能可能打开微信、影响未读状态，且受系统与微信版本限制",
+        warning = true,
+    ) {
+        SwitchItem(
+            "消息气泡",
+            "向系统请求气泡；是否展示由系统决定，打开微信不代表聊天已嵌入气泡",
+            state.bubbleEnabled,
+            actions.setBubbleEnabled,
+        )
+        HorizontalDivider()
+        SwitchItem(
+            "自动学习（实验）",
+            "默认关闭。每个新会话最多尝试一次；可能拉起微信、影响未读状态，失败不会自动重试",
+            state.autoLearning,
+            actions.setAutoLearning,
+        )
+        HorizontalDivider()
+        SwitchItem(
+            "直接 launcher 对照（实验）",
+            "默认关闭。未学习时打开微信首页；学习后尝试直达。切换后需关闭旧气泡并刷新",
+            state.launcherControl,
+            actions.setLauncherControl,
+        )
+        Text(
+            "风险提示：直达和气泡嵌入仍需真机验证；系统可能拦截后台启动。",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun AppearanceSection(state: SettingsUiState, onShowIconDialog: () -> Unit) {
+    SectionCard("外观") {
+        ListItem(
+            headlineContent = { Text("通知小图标") },
+            supportingContent = { Text("修改状态栏小图标；头像角标由系统绘制，无法保证同步改变") },
+            trailingContent = {
+                Button(onClick = onShowIconDialog) {
+                    Text(when (state.iconChoice) {
+                        Prefs.ICON_WECHAT -> "微信图标"
+                        Prefs.ICON_CUSTOM -> "自定义"
+                        else -> "默认"
+                    })
+                }
+            },
+            colors = transparentListItemColors(),
+        )
+    }
+}
+
+@Composable
+private fun DiagnosticsSection(
+    state: SettingsUiState,
+    actions: SettingsActions,
+    onShowLearningChoices: () -> Unit,
+) {
+    SectionCard(
+        "诊断与学习",
+        "这些入口用于验证会话直达、刷新 shortcut 与恢复监听服务",
+    ) {
+        Column(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            FilledTonalButton(
+                onClick = onShowLearningChoices,
+                enabled = !state.learningBusy,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("手动学习会话（会打开微信）") }
+            Text(state.learningStatus, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(
+                onClick = actions.refreshLearning,
+                enabled = !state.learningBusy,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("刷新当前通知 / shortcut（不打开微信）") }
+            TextButton(onClick = actions.forgetLearning, modifier = Modifier.fillMaxWidth()) {
+                Text("清除学习结果")
+            }
+            HorizontalDivider()
+            OutlinedButton(onClick = actions.rebindListener, modifier = Modifier.fillMaxWidth()) {
+                Text("重新绑定监听服务")
+            }
+            Text(
+                "学习映射仅在内存；Main_User 随直达 shortcut 保存在系统本机，不显示、不记录日志、不上传。映射会在移除、身份变化、监听断开或重启后清理。自动失败或跳过不会重试；关闭自动学习不会清除已学结果。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "已知限制：回复与标为已读取决于微信通知入口；群聊判定采用“发送者：内容”启发式；不做表情翻译。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionCard(
+    title: String,
+    subtitle: String? = null,
+    warning: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column {
+            Column(
+                Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(title, style = MaterialTheme.typography.titleLarge)
+                subtitle?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (warning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+private fun PermissionItem(label: String, granted: Boolean, description: String, onAction: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(label) },
+        supportingContent = {
+            Column {
+                Text(description)
+                Text(
+                    if (granted) "已授予" else "未授予",
+                    color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        trailingContent = {
+            if (!granted) Button(onClick = onAction) { Text("去设置") }
+        },
+        colors = transparentListItemColors(),
+    )
+}
+
+@Composable
+private fun SwitchItem(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(label) },
+        supportingContent = { Text(description) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        modifier = Modifier.clickable { onCheckedChange(!checked) },
+        colors = transparentListItemColors(),
+    )
+}
+
+@Composable
+private fun transparentListItemColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
+
+@Composable
+private fun AutoLearningRiskDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("允许自动发送微信通知入口？") },
+        text = {
+            Text("每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发。会发送原微信 PendingIntent，可能打开微信；系统也可能拦截。5 秒无有效回调即放弃。开启前已有会话不会补学。Main_User 仅在内存处理，但直达 shortcut 会由系统保存在本机，不记录日志、不上传。关闭会立即阻止在途结果应用，但不能撤回已发送入口。")
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("了解风险并开启") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun IconChoiceDialog(
+    currentChoice: Int,
+    hasCustomIcon: Boolean,
+    onChooseImage: () -> Unit,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selected by rememberSaveable(currentChoice) { mutableStateOf(currentChoice) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("通知小图标") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                IconRadioItem("默认", "微信原始通知的小图标", selected == Prefs.ICON_DEFAULT) {
+                    selected = Prefs.ICON_DEFAULT
+                }
+                IconRadioItem("微信图标", "透明背景、白色微信样式双气泡", selected == Prefs.ICON_WECHAT) {
+                    selected = Prefs.ICON_WECHAT
+                }
+                if (hasCustomIcon) {
+                    IconRadioItem("自定义", "使用已保存的图片", selected == Prefs.ICON_CUSTOM) {
+                        selected = Prefs.ICON_CUSTOM
+                    }
+                }
+                TextButton(onClick = onChooseImage) { Text("选择自定义图片") }
+                Text(
+                    "透明图片使用透明度；不透明图片以亮度作为遮罩（白色显示，黑色透明）。选择成功后立即应用。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(selected) }) { Text("确定") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun IconRadioItem(label: String, description: String, selected: Boolean, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(label) },
+        supportingContent = { Text(description) },
+        leadingContent = { RadioButton(selected = selected, onClick = onClick) },
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = transparentListItemColors(),
+    )
+}
+
+@Composable
+private fun LearningChoicesDialog(
+    choices: List<Pair<Conversation, String>>,
+    onChoose: (Conversation, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择会话并打开微信") },
+        text = {
+            Column(
+                Modifier.widthIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("点击会发送一次该通知原始入口并打开微信。只读取回调 Main_User；返回后请刷新 shortcut。")
+                if (choices.isEmpty()) Text("没有当前通知，请等待新通知后再试。")
+                choices.forEach { (conversation, token) ->
+                    FilledTonalButton(
+                        onClick = { onChoose(conversation, token) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("学习并打开：${conversation.title}") }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return current as? Activity
+}
+
+private fun isListenerGranted(context: Context): Boolean {
+    val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        ?: return false
+    val component = ComponentName(context, WeChatListenerService::class.java).flattenToString()
+    return flat.split(":").any { it == component }
+}
+
+private fun isPostGranted(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+    return context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+}
+
+private val previewState = SettingsUiState(
+    listenerGranted = true,
+    postGranted = false,
+    showPostPermission = true,
+    enabled = true,
+    replyEnabled = true,
+    groupEnabled = true,
+    bubbleEnabled = false,
+    autoLearning = false,
+    launcherControl = false,
+    iconChoice = Prefs.ICON_DEFAULT,
+    hasCustomIcon = false,
+    learningBusy = false,
+    learningStatus = "等待操作",
+)
+
+@Preview(name = "Phone", widthDp = 412, heightDp = 892, showBackground = true)
+@Preview(name = "Tablet", widthDp = 840, heightDp = 900, showBackground = true)
+@Composable
+private fun SettingsScreenPreview() {
+    WeChatNotifyEvoTheme(dynamicColor = false) {
+        SettingsScreen(previewState, SettingsActions(), {}, {})
+    }
+}

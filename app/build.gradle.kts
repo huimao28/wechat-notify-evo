@@ -19,12 +19,12 @@ val releaseKeystoreType: String? = releaseKeystoreFile?.takeIf { it.exists() }?.
 
 android {
     namespace = "com.huimao.wechatnotifyevo"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.huimao.wechatnotifyevo"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 18
         versionName = "1.0.17"
     }
