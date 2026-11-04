@@ -22,8 +22,10 @@ object Prefs {
     const val ICON_WECHAT = "wechat"
     const val ICON_CUSTOM = "custom"
 
-    private fun prefs(context: Context) =
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+    internal fun store(context: Context): SharedPreferences =
+        context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+    private fun prefs(context: Context) = store(context)
 
     fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, true)
     fun setEnabled(context: Context, value: Boolean) {
@@ -93,5 +95,16 @@ object Prefs {
 
     fun setIconChoice(context: Context, value: String) {
         prefs(context).edit().putString(KEY_ICON, value).apply()
+    }
+
+    fun isKeepAliveEnabled(context: Context): Boolean =
+        KeepAlivePreferencePolicy.read { key, default ->
+            prefs(context).getBoolean(key, default)
+        }
+
+    fun setKeepAliveEnabled(context: Context, value: Boolean) {
+        // This setting controls a running service, so publish it synchronously
+        // before start/stop to close races with service creation and restart.
+        prefs(context).edit().putBoolean(KeepAlivePreferencePolicy.KEY, value).commit()
     }
 }

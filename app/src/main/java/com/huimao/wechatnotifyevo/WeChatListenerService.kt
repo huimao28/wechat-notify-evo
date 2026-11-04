@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Standalone replacement for the Nevolution chain: this service itself is the
@@ -31,6 +32,9 @@ class WeChatListenerService : NotificationListenerService() {
 
     companion object {
         const val WECHAT_PACKAGE = "com.tencent.mm"
+        private val listenerConnected = AtomicBoolean(false)
+
+        fun isListenerConnected(): Boolean = listenerConnected.get()
 
         private fun notificationManager(context: Context): NotificationManager? =
             context.getSystemService(NotificationManager::class.java)
@@ -83,16 +87,26 @@ class WeChatListenerService : NotificationListenerService() {
     }
 
     override fun onListenerConnected() {
+        listenerConnected.set(true)
         NotificationFactory.ensureChannels(this)
         ConversationShortcuts.pruneOrphans(this)
+        // A listener connection is system-originated; all optional restoration
+        // still goes through the coordinator and remains preference-gated.
+        KeepAliveCoordinator.restoreIfEnabled(this)
     }
 
     override fun onListenerDisconnected() {
+        listenerConnected.set(false)
         // Missed updates make every captured snapshot untrustworthy.
         ownRemovals.clear()
         ManualConversationLearning.cancelPending()
         cancelAll(this)
         super.onListenerDisconnected()
+    }
+
+    override fun onDestroy() {
+        listenerConnected.set(false)
+        super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {

@@ -3,6 +3,9 @@
 
     <!-- Needed to post the evolved notifications (Android 13+ runtime permission). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Public launcher resolution only; no private WeChat components. -->
     <queries>
@@ -47,6 +50,35 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Optional, user-controlled process reliability aid. No existing FGS type
+             describes keeping a NotificationListenerService process available, so
+             specialUse is declared rather than misrepresenting it as dataSync. -->
+        <service
+            android:name=".OptionalKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-opted persistent notification to improve availability of the app's notification-listener service; no data transfer or sensitive notification processing occurs in this foreground service." />
+        </service>
+
+        <service
+            android:name=".KeepAliveHealthJobService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <receiver
+            android:name=".KeepAliveRestoreReceiver"
+            android:directBootAware="false"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Receives reply / mark-read / delete actions from evolved notifications.
              Only ever targeted with explicit intents, so it stays non-exported. -->

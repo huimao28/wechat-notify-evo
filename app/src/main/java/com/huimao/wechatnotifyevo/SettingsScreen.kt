@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
@@ -66,6 +67,7 @@ private data class SettingsUiState(
     val enabled: Boolean,
     val replyEnabled: Boolean,
     val groupEnabled: Boolean,
+    val keepAliveEnabled: Boolean,
     val directChatEnabled: Boolean,
     val iconChoice: String,
     val hasCustomIcon: Boolean,
@@ -79,6 +81,9 @@ private data class SettingsActions(
     val setEnabled: (Boolean) -> Unit = {},
     val setReplyEnabled: (Boolean) -> Unit = {},
     val setGroupEnabled: (Boolean) -> Unit = {},
+    val setKeepAliveEnabled: (Boolean) -> Unit = {},
+    val openBatteryOptimization: () -> Unit = {},
+    val openAppDetails: () -> Unit = {},
     val setDirectChatEnabled: (Boolean) -> Unit = {},
     val setIconChoice: (String) -> Unit = {},
     val chooseCustomIcon: () -> Unit = {},
@@ -96,6 +101,7 @@ fun SettingsRoute() {
     var enabled by remember { mutableStateOf(Prefs.isEnabled(context)) }
     var replyEnabled by remember { mutableStateOf(Prefs.isReplyEnabled(context)) }
     var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
+    var keepAliveEnabled by remember { mutableStateOf(Prefs.isKeepAliveEnabled(context)) }
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
     var directChatEnabled by remember { mutableStateOf(Prefs.isDirectChatEnabled(context)) }
     var confirmDirectChat by rememberSaveable { mutableStateOf(false) }
@@ -144,6 +150,7 @@ fun SettingsRoute() {
         enabled = enabled,
         replyEnabled = replyEnabled,
         groupEnabled = groupEnabled,
+        keepAliveEnabled = keepAliveEnabled,
         directChatEnabled = directChatEnabled,
         iconChoice = iconChoice,
         hasCustomIcon = CustomNotificationIcon.load(context) != null,
@@ -160,6 +167,31 @@ fun SettingsRoute() {
         },
         setReplyEnabled = { replyEnabled = it; Prefs.setReplyEnabled(context, it) },
         setGroupEnabled = { groupEnabled = it; Prefs.setGroupEnabled(context, it) },
+        setKeepAliveEnabled = { requested ->
+            var started = true
+            KeepAliveTransition(
+                writePreference = { Prefs.setKeepAliveEnabled(context, it) },
+                // This callback is invoked only by the visible settings Activity.
+                enableKeepAlive = { started = KeepAliveCoordinator.enable(context) },
+                disableKeepAlive = { KeepAliveCoordinator.disable(context) },
+            ).setEnabled(requested)
+            keepAliveEnabled = Prefs.isKeepAliveEnabled(context)
+            if (requested && !started) {
+                Toast.makeText(context, "系统未允许启动前台保活，请稍后在本页重试", Toast.LENGTH_LONG).show()
+            }
+        },
+        openBatteryOptimization = {
+            try {
+                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (_: RuntimeException) {
+                context.startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        },
+        openAppDetails = {
+            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+            })
+        },
         setDirectChatEnabled = { requested ->
             if (requested) {
                 confirmDirectChat = true
@@ -257,6 +289,7 @@ private fun SettingsScreen(
             item(span = { GridItemSpan(maxLineSpan) }) { IntroCard() }
             item { PermissionsSection(state, actions) }
             item { CoreSection(state, actions) }
+            item { KeepAliveSection(state, actions) }
             item { DirectChatSection(state, actions) }
             item { AppearanceSection(state, onShowIconDialog) }
             item { DiagnosticsSection(state, actions, onShowLearningChoices) }
@@ -299,6 +332,38 @@ private fun CoreSection(state: SettingsUiState, actions: SettingsActions) {
         SwitchItem("直接回复", "依赖微信在原通知中提供回复入口", state.replyEnabled, actions.setReplyEnabled)
         HorizontalDivider()
         SwitchItem("群聊进化", "关闭后群聊通知保持原样", state.groupEnabled, actions.setGroupEnabled)
+    }
+}
+
+@Composable
+private fun KeepAliveSection(state: SettingsUiState, actions: SettingsActions) {
+    SectionCard(
+        title = "后台可靠性",
+        subtitle = "ColorOS、MagicOS 等系统仍建议允许自启动、后台运行，并设为不优化电池",
+    ) {
+        SwitchItem(
+            "前台保活（可选）",
+            "默认关闭。开启会显示常驻低优先级通知，并启用系统调度健康检查与断线监听重绑定；只能提高存活率，不能保证不被系统终止。",
+            state.keepAliveEnabled,
+            actions.setKeepAliveEnabled,
+        )
+        Column(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "请在厂商系统设置中同时允许本应用自启动、后台运行，并将电池策略设为不优化。这里不会自动申请电池优化白名单。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = actions.openBatteryOptimization,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("打开电池优化设置") }
+            TextButton(onClick = actions.openAppDetails, modifier = Modifier.fillMaxWidth()) {
+                Text("打开应用详情")
+            }
+        }
     }
 }
 
@@ -573,6 +638,7 @@ private val previewState = SettingsUiState(
     enabled = true,
     replyEnabled = true,
     groupEnabled = true,
+    keepAliveEnabled = false,
     directChatEnabled = false,
     iconChoice = Prefs.ICON_DEFAULT,
     hasCustomIcon = false,
