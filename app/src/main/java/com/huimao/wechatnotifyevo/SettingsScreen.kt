@@ -113,7 +113,7 @@ fun SettingsRoute() {
         postGranted = isPostGranted(context)
     }
     fun repostConversations() {
-        ConversationStore.all().forEach {
+        ConversationStore.allForUser(CurrentUserScope.id()).filter(CurrentUserScope::accepts).forEach {
             WeChatListenerService.repostConversation(context, it, silent = true)
         }
     }
@@ -129,7 +129,7 @@ fun SettingsRoute() {
                         iconChoice = Prefs.ICON_CUSTOM
                         Prefs.setIconChoice(appContext, iconChoice)
                         showIconDialog = false
-                        ConversationStore.all().forEach {
+                        ConversationStore.allForUser(CurrentUserScope.id()).filter(CurrentUserScope::accepts).forEach {
                             WeChatListenerService.repostConversation(appContext, it, silent = true)
                         }
                     } else {
@@ -224,7 +224,8 @@ fun SettingsRoute() {
         actions = actions,
         onShowIconDialog = { showIconDialog = true },
         onShowLearningChoices = {
-            learningChoices = ConversationStore.all().filter { it.contentIntent != null }
+            learningChoices = ConversationStore.allForUser(CurrentUserScope.id())
+                .filter { CurrentUserScope.accepts(it) && it.contentIntent != null }
                 .sortedByDescending { it.notificationPostTime }.map { it to it.snapshotToken }
         },
     )
@@ -306,7 +307,7 @@ private fun IntroCard() {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("让微信通知更现代", style = MaterialTheme.typography.titleLarge)
             Text(
-                "直接监听并重发为 Messaging 样式，支持多消息会话、直接回复与标为已读。原微信通知会被取消，只保留进化版。",
+                "直接监听并重发为 Messaging 样式，支持多消息会话、直接回复与标为已读。仅处理应用所在用户空间的主微信；微信分身通知保持原样。主微信原通知会被取消，只保留进化版。",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -445,7 +446,7 @@ private fun DiagnosticsSection(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "已知限制：回复与标为已读取决于微信通知入口；群聊判定采用“发送者：内容”启发式；不做表情翻译。",
+                "仅处理应用所在用户空间的主微信；微信分身通知保持原样。已知限制：回复与标为已读取决于微信通知入口；群聊判定采用“发送者：内容”启发式；不做表情翻译。",
                 style = MaterialTheme.typography.bodySmall,
             )
         }

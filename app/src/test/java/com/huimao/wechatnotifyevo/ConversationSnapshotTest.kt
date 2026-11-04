@@ -5,9 +5,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ConversationSnapshotTest {
+    companion object { private const val TEST_USER = 0 }
     @After fun clear() = ConversationStore.clear()
 
-    private fun current(): Conversation = ConversationStore.getOrCreate(7, "same title").apply {
+    private fun current(): Conversation = ConversationStore.getOrCreate(7, "same title", TEST_USER).apply {
         replaceSnapshot("notification-key", 1L, null)
     }
 
@@ -22,20 +23,20 @@ class ConversationSnapshotTest {
     @Test fun continuousUpdateKeepsLearnedRouteButRejectsInflightSnapshot() {
         val c = current()
         val old = c.snapshotToken
-        val shortcut = ConversationShortcuts.shortcutId(c.nid)
+        val shortcut = ConversationShortcuts.shortcutId(c)
         c.learnedMainUser = "synthetic-test-value"
         c.shortcutPushed = true
         c.replaceSnapshot("notification-key", 2L, null)
         assertEquals("synthetic-test-value", c.learnedMainUser)
         assertTrue(c.shortcutPushed)
         assertFalse(c.isCurrentSnapshot(old, "notification-key", null))
-        assertEquals(shortcut, ConversationShortcuts.shortcutId(c.nid))
+        assertEquals(shortcut, ConversationShortcuts.shortcutId(c))
     }
 
     @Test fun removalAndSameTitleIdReuseCannotBindLateCallback() {
         val old = current()
         val generation = old.snapshotToken
-        ConversationStore.remove(old.nid)
+        ConversationStore.remove(old.nid, old.sourceUserId)
         val fresh = current()
         assertNotSame(old, fresh)
         assertFalse(old.isCurrentSnapshot(generation, "notification-key", null))
@@ -45,7 +46,7 @@ class ConversationSnapshotTest {
 
     @Test fun changedTitleReplacesObject() {
         val old = current()
-        val fresh = ConversationStore.getOrCreate(old.nid, "another chat")
+        val fresh = ConversationStore.getOrCreate(old.nid, "another chat", old.sourceUserId)
         assertNotSame(old, fresh)
         assertFalse(old.isCurrentSnapshot(old.snapshotToken, "notification-key", null))
     }

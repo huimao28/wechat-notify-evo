@@ -25,41 +25,33 @@ import android.util.Log
 object ConversationShortcuts {
     private const val TAG = "WNE.Shortcuts"
 
-    fun shortcutId(nid: Int): String = ConversationStore.get(nid)?.let {
-        "conv_${it.routeToken}"
-    } ?: "conv_$nid"
+    fun shortcutId(conv: Conversation): String = "conv_${conv.routeToken}"
+
+    private fun shortcutId(nid: Int, sourceUserId: Int): String =
+        ConversationStore.get(nid, sourceUserId)?.let(::shortcutId) ?: "conv_${sourceUserId}_$nid"
 
     /** Public APIs only. No hidden PendingIntent introspection or private activity. */
     private fun targetIntent(context: Context, conv: Conversation): Intent? {
-        if (ConversationStore.get(conv.nid) !== conv) return null
-        if (!Prefs.isLauncherControlEnabled(context)) return trampolineIntent(context, conv)
+        if (!CurrentUserScope.accepts(conv)) return null
         val learned = conv.learnedMainUser
-        if (learned != null) {
-            val component = android.content.ComponentName(
-                WeChatListenerService.WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI")
-            val info = try { context.packageManager.getActivityInfo(component, 0) }
-                catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }
-            if (info != null && info.exported && info.enabled &&
-                info.applicationInfo.enabled && info.permission.isNullOrEmpty()) {
-                return Intent(Intent.ACTION_MAIN).setComponent(component)
-                    .addCategory(Intent.CATEGORY_LAUNCHER)
-                    .putExtra("Main_User", learned)
-                    .putExtra("Intro_Is_Muti_Talker", false)
-            }
-            conv.learningStatus = "已学习，但 LauncherUI 不可用；回退原通知中转"
-            return trampolineIntent(context, conv)
+        // Unknown conversation state must never synthesize/rebuild LauncherUI.
+        // Preserve ordinary navigation through the current user's opaque original intent.
+        if (!Prefs.isLauncherControlEnabled(context) || learned == null) {
+            return if (conv.contentIntent != null) trampolineIntent(context, conv) else null
         }
-        val query = Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
-            .setPackage(WeChatListenerService.WECHAT_PACKAGE)
-        val info = context.packageManager.queryIntentActivities(query, 0)
-            .mapNotNull { it.activityInfo }
-            .firstOrNull {
-                it.packageName == WeChatListenerService.WECHAT_PACKAGE &&
-                    it.exported && it.enabled && it.applicationInfo.enabled &&
-                    it.permission.isNullOrEmpty()
-            } ?: return null
-        return Intent(query).setClassName(info.packageName, info.name)
+        val component = android.content.ComponentName(
+            WeChatListenerService.WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI")
+        val info = try { context.packageManager.getActivityInfo(component, 0) }
+            catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }
+        if (info != null && info.exported && info.enabled &&
+            info.applicationInfo.enabled && info.permission.isNullOrEmpty()) {
+            return Intent(Intent.ACTION_MAIN).setComponent(component)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .putExtra("Main_User", learned)
+                .putExtra("Intro_Is_Muti_Talker", false)
+        }
+        conv.learningStatus = "已学习，但 LauncherUI 不可用；回退原通知中转"
+        return trampolineIntent(context, conv)
     }
 
     // Intent.filterEquals ignores extras; learned/unlearned launcher targets
@@ -70,7 +62,9 @@ object ConversationShortcuts {
         actual.hasExtra("Intro_Is_Muti_Talker") == expected.hasExtra("Intro_Is_Muti_Talker") &&
         actual.getBooleanExtra("Intro_Is_Muti_Talker", false) ==
             expected.getBooleanExtra("Intro_Is_Muti_Talker", false) &&
-        actual.getStringExtra("snapshot") == expected.getStringExtra("snapshot")
+        actual.getStringExtra("snapshot") == expected.getStringExtra("snapshot") &&
+        actual.getIntExtra(BubbleTrampolineActivity.EXTRA_SOURCE_USER_ID, -1) ==
+            expected.getIntExtra(BubbleTrampolineActivity.EXTRA_SOURCE_USER_ID, -1)
 
     /** Do not attach a bubble to a stale target after a failed/rate-limited switch. */
     fun isTargetPublished(context: Context, conv: Conversation): Boolean {
@@ -78,13 +72,14 @@ object ConversationShortcuts {
         return try {
             val target = targetIntent(context, conv) ?: return false
             context.getSystemService(ShortcutManager::class.java)?.dynamicShortcuts
-                ?.any { it.id == shortcutId(conv.nid) && sameTarget(it.intent, target) } == true
+                ?.any { it.id == shortcutId(conv) && sameTarget(it.intent, target) } == true
         } catch (e: RuntimeException) {
             false
         }
     }
 
     fun publish(context: Context, conv: Conversation) {
+        if (!CurrentUserScope.accepts(conv)) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !Prefs.isDirectChatEnabled(context)) return
         try {
             val sm = context.getSystemService(ShortcutManager::class.java) ?: return
@@ -94,7 +89,7 @@ object ConversationShortcuts {
             // conversation (it looks the live content intent up by nid at
             // tap time), so a push is only needed once, or again if the
             // shortcut is gone (evicted).
-            val id = shortcutId(conv.nid)
+            val id = shortcutId(conv)
             val launch = targetIntent(context, conv)
             if (launch == null) {
                 Log.w(TAG, "Public launcher unavailable; no control bubble published")
@@ -121,7 +116,7 @@ object ConversationShortcuts {
                 .setIntent(launch)
                 .setPersons(arrayOf(person))
                 .setCategories(setOf("android.shortcut.conversation"))
-                .setLocusId(LocusId(shortcutId(conv.nid)))
+                .setLocusId(LocusId(shortcutId(conv)))
                 .apply { conv.largeIcon?.let { setIcon(it) } }
                 .build()
             // pushDynamicShortcut evicts the lowest-ranked shortcut when
@@ -161,6 +156,7 @@ object ConversationShortcuts {
         return Intent(context, BubbleTrampolineActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .putExtra(BubbleTrampolineActivity.EXTRA_NID, conv.nid)
+            .putExtra(BubbleTrampolineActivity.EXTRA_SOURCE_USER_ID, conv.sourceUserId)
             .putExtra("snapshot", conv.routeToken)
     }
 
@@ -178,18 +174,19 @@ object ConversationShortcuts {
         }
     }
 
-    fun remove(context: Context, nid: Int): Boolean =
-        removeIds(context, listOf(shortcutId(nid), "conv_$nid").distinct())
+    fun remove(context: Context, nid: Int, sourceUserId: Int): Boolean =
+        removeIds(context, listOf(shortcutId(nid, sourceUserId), "conv_$nid").distinct())
 
     fun removeAll(context: Context, convs: List<Conversation>) {
-        removeIds(context, convs.flatMap { listOf(shortcutId(it.nid), "conv_${it.nid}") }.distinct())
+        removeIds(context, convs.flatMap { listOf(shortcutId(it), "conv_${it.nid}") }.distinct())
     }
 
     fun pruneOrphans(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         try {
             val sm = context.getSystemService(ShortcutManager::class.java) ?: return
-            val live = ConversationStore.all().map { shortcutId(it.nid) }.toSet()
+            val currentUserId = CurrentUserScope.id()
+            val live = ConversationStore.allForUser(currentUserId).map(::shortcutId).toSet()
             val stale = sm.getShortcuts(ShortcutManager.FLAG_MATCH_DYNAMIC or
                 ShortcutManager.FLAG_MATCH_CACHED or ShortcutManager.FLAG_MATCH_PINNED)
                 .map { it.id }.filter { it.startsWith("conv_") && it !in live }

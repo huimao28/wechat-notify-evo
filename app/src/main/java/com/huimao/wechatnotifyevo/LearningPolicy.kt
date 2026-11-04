@@ -8,7 +8,7 @@ class AutoLearningPolicy {
         if (conv.autoLearningConsidered) return false
         conv.autoLearningConsidered = true
         if (!enabled || busy || conv.learnedMainUser != null ||
-            ConversationStore.get(conv.nid) !== conv) return false
+            ConversationStore.get(conv.nid, conv.sourceUserId) !== conv) return false
         while (attempts.isNotEmpty() && now - attempts.first() >= 3_600_000L) {
             attempts.removeFirst()
         }

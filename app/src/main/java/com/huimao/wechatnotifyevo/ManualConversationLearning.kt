@@ -23,6 +23,7 @@ object ManualConversationLearning {
     }
 
     fun considerAutomatic(context: Context, conv: Conversation) {
+        if (!CurrentUserScope.accepts(conv)) return
         if (!automatic.admit(conv, Prefs.isAutoLearningEnabled(context), busy,
                 android.os.SystemClock.elapsedRealtime())) return
         learn(context, conv, conv.snapshotToken, auto = true)
@@ -30,12 +31,17 @@ object ManualConversationLearning {
 
     // Automatic calls use the Service context and NO sender-side BAL grant.
     fun learn(activity: Context, conv: Conversation, token: String, auto: Boolean = false) {
+        if (!CurrentUserScope.accepts(conv)) {
+            status = "仅允许学习应用所在用户空间的主微信通知"
+            return
+        }
         if (auto && !Prefs.isAutoLearningEnabled(activity)) return
         val pi = conv.contentIntent
         val key = conv.notificationKey
         if (busy) return
         if (pi == null || !conv.isCurrentSnapshot(token, key, pi) ||
-            pi.creatorPackage != WeChatListenerService.WECHAT_PACKAGE) {
+            pi.creatorPackage != WeChatListenerService.WECHAT_PACKAGE ||
+            !CurrentUserScope.accepts(conv.sourceUserId, pi)) {
             status = "通知已变化或入口不可用；请等待新通知并重新选择"
             return
         }
@@ -99,7 +105,8 @@ object ManualConversationLearning {
 
     fun refresh(context: Context) {
         ConversationShortcuts.pruneOrphans(context)
-        val current = ConversationStore.all()
+        val current = ConversationStore.allForUser(CurrentUserScope.id())
+            .filter(CurrentUserScope::accepts)
         if (current.isEmpty()) {
             status = "无当前通知；请等待新通知并重新学习"
             return
@@ -113,8 +120,9 @@ object ManualConversationLearning {
     fun forget(context: Context) {
         requests.cancel()
         busy = false
-        ConversationStore.all().forEach {
-            ConversationShortcuts.remove(context, it.nid)
+        ConversationStore.allForUser(CurrentUserScope.id())
+            .filter(CurrentUserScope::accepts).forEach {
+            ConversationShortcuts.remove(context, it.nid, it.sourceUserId)
             it.snapshotToken = java.util.UUID.randomUUID().toString()
             it.routeToken = java.util.UUID.randomUUID().toString()
             it.learnedMainUser = null

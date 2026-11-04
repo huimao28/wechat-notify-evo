@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -17,10 +18,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * package and channels -> maintain one group summary per conversation type.
  */
 class WeChatListenerService : NotificationListenerService() {
-    private val ownRemovals = linkedSetOf<Pair<String, Long>>()
+    private val ownRemovals = linkedSetOf<Triple<Int, String, Long>>()
 
     private fun replaceOriginal(sbn: StatusBarNotification) {
-        val marker = sbn.key to sbn.postTime
+        val marker = Triple(sbn.userId, sbn.key, sbn.postTime)
         ownRemovals.add(marker)
         // Bound stale markers if a vendor never delivers removal callbacks.
         if (ownRemovals.size > 128) ownRemovals.remove(ownRemovals.first())
@@ -30,8 +31,32 @@ class WeChatListenerService : NotificationListenerService() {
         }
     }
 
+    private fun sourceUserAllowed(sbn: StatusBarNotification): Boolean {
+        val sourceUserId = sbn.userId
+        val currentUserId = CurrentUserScope.id()
+        if (sourceUserId == currentUserId && CurrentUserScope.isCurrent(sbn.user)) return true
+        Log.i(TAG, "Ignored WeChat notification: sourceUserId=$sourceUserId currentUserId=$currentUserId")
+        return false
+    }
+
+    private fun creatorUserAllowed(sbn: StatusBarNotification): Boolean {
+        val currentUserId = CurrentUserScope.id()
+        val contentIntent = sbn.notification?.contentIntent
+        val creatorUser = CurrentUserScope.creatorUserHandle(contentIntent)
+        if (creatorUser == null) {
+            // Explicit policy: unknown/system creators are allowed so normal WeChat is not lost.
+            Log.d(TAG, "Allowed WeChat notification: sourceUserId=${sbn.userId} creatorUserId=unknown currentUserId=$currentUserId")
+            return true
+        }
+        if (CurrentUserScope.isCurrent(creatorUser)) return true
+        val creatorUserId = CurrentUserScope.creatorUserId(contentIntent)
+        Log.i(TAG, "Ignored WeChat notification: sourceUserId=${sbn.userId} creatorUserId=$creatorUserId currentUserId=$currentUserId")
+        return false
+    }
+
     companion object {
         const val WECHAT_PACKAGE = "com.tencent.mm"
+        private const val TAG = "WNE.UserIsolation"
         private val listenerConnected = AtomicBoolean(false)
 
         fun isListenerConnected(): Boolean = listenerConnected.get()
@@ -41,6 +66,7 @@ class WeChatListenerService : NotificationListenerService() {
 
         /** (Re)post one conversation's evolved notification and refresh summaries. */
         fun repostConversation(context: Context, conv: Conversation, silent: Boolean) {
+            if (!CurrentUserScope.accepts(conv)) return
             val nm = notificationManager(context) ?: return
             ConversationShortcuts.publish(context, conv)
             nm.notify(
@@ -51,10 +77,11 @@ class WeChatListenerService : NotificationListenerService() {
         }
 
         /** Cancel one evolved conversation notification and refresh summaries. */
-        fun cancelEvolved(context: Context, nid: Int) {
+        fun cancelEvolved(context: Context, nid: Int, sourceUserId: Int) {
+            if (sourceUserId != CurrentUserScope.id()) return
             val nm = notificationManager(context) ?: return
             nm.cancel(nid)
-            ConversationShortcuts.remove(context, nid)
+            ConversationShortcuts.remove(context, nid, sourceUserId)
             refreshSummaries(context)
         }
 
@@ -74,11 +101,13 @@ class WeChatListenerService : NotificationListenerService() {
         /** Cancel every evolved notification and drop all archives. */
         fun cancelAll(context: Context) {
             val nm = notificationManager(context) ?: return
-            val convs = ConversationStore.all()
+            val currentUserId = CurrentUserScope.id()
+            val allConvs = ConversationStore.all()
+            val convs = allConvs.filter { it.sourceUserId == currentUserId }
             for (conv in convs) {
                 nm.cancel(conv.nid)
             }
-            ConversationShortcuts.removeAll(context, convs)
+            ConversationShortcuts.removeAll(context, allConvs)
             for (type in ConversationType.values()) {
                 nm.cancel(NotificationFactory.summaryIdFor(type))
             }
@@ -89,6 +118,8 @@ class WeChatListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         listenerConnected.set(true)
         NotificationFactory.ensureChannels(this)
+        val staleUsers = ConversationStore.removeOtherUsers(CurrentUserScope.id())
+        ConversationShortcuts.removeAll(this, staleUsers)
         ConversationShortcuts.pruneOrphans(this)
         // A listener connection is system-originated; all optional restoration
         // still goes through the coordinator and remains preference-gated.
@@ -111,8 +142,11 @@ class WeChatListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName != WECHAT_PACKAGE) return
-        if (!Prefs.isEnabled(this)) return
+        // Earliest WeChat gate: a clone user must remain completely untouched.
+        if (!sourceUserAllowed(sbn)) return
         val n = sbn.notification ?: return
+        if (!creatorUserAllowed(sbn)) return
+        if (!Prefs.isEnabled(this)) return
         if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) return
         // WeChat's own group summary: drop it, our own summary replaces it.
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) {
@@ -140,13 +174,13 @@ class WeChatListenerService : NotificationListenerService() {
         // Never recover a mapping by title/nid. Reuse only this uninterrupted
         // object with the same full key and (when supplied) source shortcut identity.
         val identity = n.shortcutId
-        val previous = ConversationStore.get(sbn.id)
+        val previous = ConversationStore.get(sbn.id, sbn.userId)
         if (previous != null && (previous.title != title || !previous.continues(sbn.key, identity))) {
-            ConversationShortcuts.remove(this, previous.nid)
-            ConversationStore.remove(previous.nid)
+            ConversationShortcuts.remove(this, previous.nid, previous.sourceUserId)
+            ConversationStore.remove(previous.nid, previous.sourceUserId)
         }
         ConversationShortcuts.pruneOrphans(this)
-        val conv = ConversationStore.getOrCreate(sbn.id, title)
+        val conv = ConversationStore.getOrCreate(sbn.id, title, sbn.userId)
         conv.replaceSnapshot(sbn.key, sbn.postTime, n.contentIntent, identity)
         conv.title = title
         conv.smallIcon = n.smallIcon
@@ -233,16 +267,17 @@ class WeChatListenerService : NotificationListenerService() {
         reason: Int,
     ) {
         if (sbn == null || sbn.packageName != WECHAT_PACKAGE) return
+        if (!sourceUserAllowed(sbn) || !creatorUserAllowed(sbn)) return
         // Our own cancelNotification() calls also arrive here; they must not
         // wipe the archive we just built the evolved notification from.
-        val own = ownRemovals.remove(sbn.key to sbn.postTime)
+        val own = ownRemovals.remove(Triple(sbn.userId, sbn.key, sbn.postTime))
         if (own && reason == REASON_LISTENER_CANCEL) return
         // WeChat itself removed the notification (read in-app, clicked, or
         // otherwise dismissed): drop our evolved copy too.
-        val conv = ConversationStore.get(sbn.id) ?: return
+        val conv = ConversationStore.get(sbn.id, sbn.userId) ?: return
         if (conv.notificationKey != sbn.key || conv.notificationPostTime != sbn.postTime) return
-        ConversationShortcuts.remove(this, sbn.id)
-        ConversationStore.remove(sbn.id)
+        ConversationShortcuts.remove(this, sbn.id, sbn.userId)
+        ConversationStore.remove(sbn.id, sbn.userId)
         val nm = notificationManager(this) ?: return
         nm.cancel(conv.nid)
         refreshSummaries(this)
