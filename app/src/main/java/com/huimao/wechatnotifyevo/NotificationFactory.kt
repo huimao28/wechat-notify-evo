@@ -111,13 +111,14 @@ object NotificationFactory {
         )
     }
 
-    private fun deletePendingIntent(context: Context, nid: Int): PendingIntent =
+    private fun deletePendingIntent(context: Context, conv: Conversation): PendingIntent =
         PendingIntent.getBroadcast(
             context,
-            nid,
+            conv.nid,
             Intent(context, EvolutionActionReceiver::class.java).apply {
                 action = EvolutionActionReceiver.ACTION_DELETE
-                putExtra(EvolutionActionReceiver.EXTRA_NID, nid)
+                putExtra(EvolutionActionReceiver.EXTRA_NID, conv.nid)
+                putExtra(EvolutionActionReceiver.EXTRA_SOURCE_USER_ID, conv.sourceUserId)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -127,6 +128,7 @@ object NotificationFactory {
         conv: Conversation,
         silent: Boolean,
     ): Notification {
+        require(CurrentUserScope.accepts(conv)) { "conversation is outside current user" }
         val style = Notification.MessagingStyle(context.getString(R.string.self_display_name))
         for (msg in conv.messages.takeLast(20)) {
             if (msg.sender != null &&
@@ -151,7 +153,7 @@ object NotificationFactory {
             .setShowWhen(true)
             .setWhen(conv.messages.lastOrNull()?.timestamp ?: System.currentTimeMillis())
             .setContentIntent(conv.contentIntent ?: wechatLaunchIntent(context))
-            .setDeleteIntent(deletePendingIntent(context, conv.nid))
+            .setDeleteIntent(deletePendingIntent(context, conv))
             .setAutoCancel(true)
             .setGroup(groupKeyFor(conv.type))
             .setStyle(style)
@@ -159,8 +161,8 @@ object NotificationFactory {
         // Android 11+: link the notification to its conversation shortcut so
         // the system offers per-conversation priority/silent settings.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setShortcutId(ConversationShortcuts.shortcutId(conv.nid))
-            builder.setLocusId(LocusId(ConversationShortcuts.shortcutId(conv.nid)))
+            builder.setShortcutId(ConversationShortcuts.shortcutId(conv))
+            builder.setLocusId(LocusId(ConversationShortcuts.shortcutId(conv)))
         }
         // Android 11+: shortcut target is normally our trampoline. The manual
         // launcher control uses only WeChat's public home entry, never chat extras.
@@ -172,7 +174,7 @@ object NotificationFactory {
             ConversationShortcuts.isTargetPublished(context, conv)
         ) {
             builder.setBubbleMetadata(
-                Notification.BubbleMetadata.Builder(ConversationShortcuts.shortcutId(conv.nid))
+                Notification.BubbleMetadata.Builder(ConversationShortcuts.shortcutId(conv))
                     .setDesiredHeight(512)
                     .build()
             )
@@ -190,6 +192,7 @@ object NotificationFactory {
                 Intent(context, EvolutionActionReceiver::class.java).apply {
                     action = EvolutionActionReceiver.ACTION_REPLY
                     putExtra(EvolutionActionReceiver.EXTRA_NID, conv.nid)
+                    putExtra(EvolutionActionReceiver.EXTRA_SOURCE_USER_ID, conv.sourceUserId)
                     putExtra(EvolutionActionReceiver.EXTRA_REPLY_PI, conv.replyPendingIntent)
                     putExtra(EvolutionActionReceiver.EXTRA_RESULT_KEY, conv.remoteInputResultKey)
                 },
@@ -216,6 +219,7 @@ object NotificationFactory {
                 Intent(context, EvolutionActionReceiver::class.java).apply {
                     action = EvolutionActionReceiver.ACTION_MARK_READ
                     putExtra(EvolutionActionReceiver.EXTRA_NID, conv.nid)
+                    putExtra(EvolutionActionReceiver.EXTRA_SOURCE_USER_ID, conv.sourceUserId)
                     putExtra(EvolutionActionReceiver.EXTRA_READ_PI, conv.readPendingIntent)
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -239,7 +243,8 @@ object NotificationFactory {
         context: Context,
         type: ConversationType,
     ): Notification? {
-        val convs = ConversationStore.all().filter { it.type == type }
+        val currentUserId = CurrentUserScope.id()
+        val convs = ConversationStore.allForUser(currentUserId).filter { it.type == type }
         if (convs.isEmpty()) return null
         val totalUnread = convs.sumOf { conv ->
             if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size

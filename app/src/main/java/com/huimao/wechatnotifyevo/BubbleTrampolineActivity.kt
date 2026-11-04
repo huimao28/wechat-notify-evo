@@ -47,6 +47,7 @@ import android.widget.Toast
 class BubbleTrampolineActivity : Activity() {
     companion object {
         const val EXTRA_NID = "nid"
+        const val EXTRA_SOURCE_USER_ID = "source_user_id"
         private const val TAG = "WNE.Bubble"
         private const val FORWARD_DELAY_MS = 300L
         private const val FALLBACK_DELAY_MS = 5000L
@@ -132,9 +133,16 @@ class BubbleTrampolineActivity : Activity() {
 
     private fun forward() {
         val nid = intent.getIntExtra(EXTRA_NID, -1)
-        val conv = ConversationStore.get(nid)
+        val sourceUserId = intent.getIntExtra(EXTRA_SOURCE_USER_ID, -1)
+        val currentUserId = CurrentUserScope.id()
+        if (sourceUserId != currentUserId) {
+            Log.w(TAG, "Rejected bubble route: sourceUserId=$sourceUserId currentUserId=$currentUserId")
+            finish()
+            return
+        }
+        val conv = ConversationStore.get(nid, sourceUserId)
         val pi = conv?.takeIf {
-            intent.getStringExtra("snapshot") == it.routeToken
+            CurrentUserScope.accepts(it) && intent.getStringExtra("snapshot") == it.routeToken
         }?.contentIntent
         if (pi == null) {
             Log.w(TAG, "No live content intent")

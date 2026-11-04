@@ -21,7 +21,7 @@ enum class ConversationType { UNKNOWN, DIRECT, GROUP, BOT }
  * Archives live only in process memory (v1): if the app process is killed,
  * history restarts from the next incoming notification.
  */
-class Conversation(val nid: Int) {
+class Conversation(val nid: Int, val sourceUserId: Int) {
     var title: String = ""
     var type: ConversationType = ConversationType.UNKNOWN
     var smallIcon: Icon? = null
@@ -39,11 +39,11 @@ class Conversation(val nid: Int) {
     var learningStatus: String = "尚未学习当前通知"
 
     fun isCurrentSnapshot(token: String, key: String?, pi: PendingIntent?): Boolean =
-        ConversationStore.get(nid) === this && snapshotToken == token &&
+        ConversationStore.get(nid, sourceUserId) === this && snapshotToken == token &&
             notificationKey == key && key != null && contentIntent === pi
 
     fun continues(key: String, identity: String?): Boolean =
-        ConversationStore.get(nid) === this && notificationKey == key &&
+        ConversationStore.get(nid, sourceUserId) === this && notificationKey == key &&
             sourceIdentity == identity
 
     fun replaceSnapshot(key: String, postTime: Long, pi: PendingIntent?, identity: String? = null) {
@@ -79,37 +79,53 @@ class Conversation(val nid: Int) {
 }
 
 object ConversationStore {
-    private val map = HashMap<Int, Conversation>()
+    private data class Key(val sourceUserId: Int, val nid: Int)
+    private val map = HashMap<Key, Conversation>()
 
-    fun getOrCreate(nid: Int, title: String): Conversation {
-        val existing = map[nid]
+    fun getOrCreate(nid: Int, title: String, sourceUserId: Int): Conversation {
+        val key = Key(sourceUserId, nid)
+        val existing = map[key]
         if (existing != null && existing.title != title) {
-            remove(nid)
-            val fresh = Conversation(nid)
+            remove(nid, sourceUserId)
+            val fresh = Conversation(nid, sourceUserId)
             fresh.title = title
-            map[nid] = fresh
+            map[key] = fresh
             return fresh
         }
-        return existing ?: Conversation(nid).also {
+        return existing ?: Conversation(nid, sourceUserId).also {
             it.title = title
-            map[nid] = it
+            map[key] = it
         }
     }
 
-    fun get(nid: Int): Conversation? = map[nid]
+    fun get(nid: Int, sourceUserId: Int): Conversation? = map[Key(sourceUserId, nid)]
 
-    fun remove(nid: Int) {
-        map.remove(nid)?.let {
-            it.learnedMainUser = null
-            it.contentIntent = null
-            it.snapshotToken = java.util.UUID.randomUUID().toString()
-        }
+    fun remove(nid: Int, sourceUserId: Int) {
+        map.remove(Key(sourceUserId, nid))?.invalidate()
+    }
+
+    private fun Conversation.invalidate() {
+        learnedMainUser = null
+        contentIntent = null
+        snapshotToken = java.util.UUID.randomUUID().toString()
     }
 
     fun all(): List<Conversation> = map.values.toList()
+    fun allForUser(sourceUserId: Int): List<Conversation> =
+        map.values.filter { it.sourceUserId == sourceUserId }
+
+    /** Removes stale/foreign-user state and returns it for shortcut cleanup. */
+    fun removeOtherUsers(currentUserId: Int): List<Conversation> {
+        val removed = map.values.filter { it.sourceUserId != currentUserId }
+        removed.forEach { conv ->
+            map.remove(Key(conv.sourceUserId, conv.nid))
+            conv.invalidate()
+        }
+        return removed
+    }
 
     fun clear() {
-        map.keys.toList().forEach { remove(it) }
+        map.values.toList().forEach { remove(it.nid, it.sourceUserId) }
     }
 }
 

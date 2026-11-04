@@ -5,8 +5,9 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AutoLearningPolicyTest {
+    companion object { private const val TEST_USER = 0 }
     @After fun clear() = ConversationStore.clear()
-    private fun conversation(id: Int = 1) = ConversationStore.getOrCreate(id, "same").apply {
+    private fun conversation(id: Int = 1) = ConversationStore.getOrCreate(id, "same", TEST_USER).apply {
         replaceSnapshot("key-$id", 1L, null)
     }
 
@@ -69,7 +70,7 @@ class AutoLearningPolicyTest {
     @Test fun sameIdTitleKeyAfterRemovalCannotRecoverMapping() {
         val c = conversation().apply { learnedMainUser = "synthetic" }
         val route = c.routeToken
-        ConversationStore.remove(1)
+        ConversationStore.remove(1, TEST_USER)
         val next = conversation()
         assertNull(c.learnedMainUser)
         assertNull(next.learnedMainUser)

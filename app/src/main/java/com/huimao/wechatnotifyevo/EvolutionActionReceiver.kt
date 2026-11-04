@@ -23,6 +23,7 @@ class EvolutionActionReceiver : BroadcastReceiver() {
         const val ACTION_MARK_READ = "com.huimao.wechatnotifyevo.ACTION_MARK_READ"
         const val ACTION_DELETE = "com.huimao.wechatnotifyevo.ACTION_DELETE"
         const val EXTRA_NID = "nid"
+        const val EXTRA_SOURCE_USER_ID = "source_user_id"
         const val EXTRA_REPLY_PI = "reply_pi"
         const val EXTRA_RESULT_KEY = "result_key"
         const val EXTRA_READ_PI = "read_pi"
@@ -31,16 +32,20 @@ class EvolutionActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val nid = intent.getIntExtra(EXTRA_NID, -1)
-        if (nid < 0) return
+        val sourceUserId = intent.getIntExtra(EXTRA_SOURCE_USER_ID, -1)
+        if (nid < 0 || sourceUserId != CurrentUserScope.id()) return
+        val conv = ConversationStore.get(nid, sourceUserId)?.takeIf(CurrentUserScope::accepts) ?: return
         when (intent.action) {
-            ACTION_REPLY -> handleReply(context, intent, nid)
-            ACTION_MARK_READ -> handleMarkRead(context, intent, nid)
-            ACTION_DELETE -> handleDelete(context, nid)
+            ACTION_REPLY -> handleReply(context, intent, conv)
+            ACTION_MARK_READ -> handleMarkRead(context, intent, conv)
+            ACTION_DELETE -> handleDelete(context, conv)
         }
     }
 
-    private fun handleReply(context: Context, intent: Intent, nid: Int) {
+    private fun handleReply(context: Context, intent: Intent, conv: Conversation) {
         val replyPi = intent.getParcelableExtra<PendingIntent>(EXTRA_REPLY_PI) ?: return
+        if (!CurrentUserScope.accepts(conv.sourceUserId, replyPi)) return
+        val nid = conv.nid
         val resultKey = intent.getStringExtra(EXTRA_RESULT_KEY) ?: return
         val results = RemoteInput.getResultsFromIntent(intent) ?: return
         val input = results.getCharSequence(resultKey)?.toString() ?: return
@@ -56,8 +61,9 @@ class EvolutionActionReceiver : BroadcastReceiver() {
         try {
             replyPi.send(context, 0, sendIntent, { _, _, _, _, _ ->
                 // Append the sent message as "self" and silently repost.
-                val conv = ConversationStore.get(nid)
-                if (conv != null) {
+                val live = ConversationStore.get(nid, conv.sourceUserId)
+                    ?.takeIf(CurrentUserScope::accepts)
+                if (live === conv) {
                     conv.messages.add(
                         ChatMessage(input, null, System.currentTimeMillis())
                     )
@@ -69,9 +75,10 @@ class EvolutionActionReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun handleMarkRead(context: Context, intent: Intent, nid: Int) {
+    private fun handleMarkRead(context: Context, intent: Intent, conv: Conversation) {
+        val nid = conv.nid
         val readPi = intent.getParcelableExtra<PendingIntent>(EXTRA_READ_PI)
-        if (readPi != null) {
+        if (readPi != null && CurrentUserScope.accepts(conv.sourceUserId, readPi)) {
             val sendIntent = Intent().addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
             readPi.creatorPackage?.let { sendIntent.setPackage(it) }
             try {
@@ -80,14 +87,15 @@ class EvolutionActionReceiver : BroadcastReceiver() {
                 Log.w(TAG, "Read PendingIntent cancelled for nid=$nid")
             }
         }
-        ConversationShortcuts.remove(context, nid)
-        ConversationStore.remove(nid)
-        WeChatListenerService.cancelEvolved(context, nid)
+        ConversationShortcuts.remove(context, nid, conv.sourceUserId)
+        ConversationStore.remove(nid, conv.sourceUserId)
+        WeChatListenerService.cancelEvolved(context, nid, conv.sourceUserId)
     }
 
-    private fun handleDelete(context: Context, nid: Int) {
-        ConversationShortcuts.remove(context, nid)
-        ConversationStore.remove(nid)
+    private fun handleDelete(context: Context, conv: Conversation) {
+        val nid = conv.nid
+        ConversationShortcuts.remove(context, nid, conv.sourceUserId)
+        ConversationStore.remove(nid, conv.sourceUserId)
         WeChatListenerService.refreshSummaries(context)
     }
 }
