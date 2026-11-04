@@ -36,23 +36,8 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: 微信通知进化 ${{ github.ref_name }}
-          body: |
-            微信通知进化正式签名版。
-
-            v1.0.18：
-            - 将“消息气泡”“自动学习”“直接 launcher”合并为“气泡内直达聊天”正式设置
-            - 开启前显示风险确认，并原子联动三个兼容偏好
-            - 关闭时立即失效在途学习、清除学习结果并禁用/移除相关 shortcut
-            - 旧安装仅在原三项全部开启时迁移为开启，否则迁移为关闭
-            - 保留诊断中的手动学习、刷新和清理入口，设置界面采用 Material 3
-
-            已知限制：
-            - 首次遇到新会话可能短暂打开微信并影响未读状态；每会话最多尝试一次，有限频且失败不补发
-            - 系统必须允许本应用显示气泡；是否显示以及微信聊天是否嵌入气泡由 Android、桌面和微信版本决定
-            - Main_User 会随直达 shortcut 保存在系统本机；应用不显示、不记录日志、不上传
-            - 直接回复/标为已读依赖微信 car-extender；群聊判定为启发式；会话归档只在进程内存
-
-            安装：下载 app-release.apk，授予通知使用权（Android 13+ 还需通知权限），并在系统中允许气泡。
-            若设备上是早期 debug 签名版，签名不同将无法覆盖安装。
+          body_path: RELEASE_NOTES.md
+          prerelease: true
+          make_latest: false
           files: app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true
