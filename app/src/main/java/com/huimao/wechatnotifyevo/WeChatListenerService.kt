@@ -85,6 +85,9 @@ class WeChatListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         NotificationFactory.ensureChannels(this)
         ConversationShortcuts.pruneOrphans(this)
+        // A listener connection is system-originated. If the user opted in,
+        // best-effort restore the separate FGS; policy/OEM rejection is contained.
+        OptionalKeepAliveService.startIfEnabled(this)
     }
 
     override fun onListenerDisconnected() {
