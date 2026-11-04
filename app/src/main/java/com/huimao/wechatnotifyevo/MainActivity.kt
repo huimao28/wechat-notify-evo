@@ -10,7 +10,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         NotificationFactory.ensureChannels(this)
         ConversationShortcuts.pruneOrphans(this)
-        OptionalKeepAliveService.startIfEnabled(this)
+        KeepAliveCoordinator.restoreIfEnabled(this)
         enableEdgeToEdge()
         setContent {
             WeChatNotifyEvoTheme {

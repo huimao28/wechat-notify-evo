@@ -11,14 +11,26 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 
-/**
- * User-opted-in foreground service for notification-listener process reliability.
- * It handles no notification content and does not claim that the process cannot be killed.
- */
+/** User-opted-in foreground reliability aid; it never reads notification content. */
 class OptionalKeepAliveService : Service() {
+    private val handler = Handler(Looper.getMainLooper())
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            if (!Prefs.isKeepAliveEnabled(this@OptionalKeepAliveService)) {
+                stopAndRemove()
+                return
+            }
+            KeepAliveCoordinator.runHealthCheck(this@OptionalKeepAliveService, "foreground-heartbeat")
+            if (Prefs.isKeepAliveEnabled(this@OptionalKeepAliveService)) {
+                handler.postDelayed(this, HEARTBEAT_INTERVAL_MILLIS)
+            }
+        }
+    }
     private val preferenceListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == KeepAlivePreferencePolicy.KEY && !Prefs.isKeepAliveEnabled(this)) {
@@ -28,6 +40,7 @@ class OptionalKeepAliveService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        runningOrRequested = true
         Prefs.store(this).registerOnSharedPreferenceChangeListener(preferenceListener)
         ensureChannel(this)
     }
@@ -48,39 +61,76 @@ class OptionalKeepAliveService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
+            startHeartbeat()
             START_STICKY
-        } catch (error: Exception) {
-            // Keep logs free of notification payloads and other user data.
+        } catch (error: RuntimeException) {
             Log.w(TAG, "Unable to enter foreground: ${error.javaClass.simpleName}")
+            stopAndRemove()
+            START_NOT_STICKY
+        } catch (error: LinkageError) {
+            Log.w(TAG, "Foreground API unavailable: ${error.javaClass.simpleName}")
             stopAndRemove()
             START_NOT_STICKY
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (Prefs.isKeepAliveEnabled(this)) {
+            KeepAliveCoordinator.scheduleTaskRemovedRecovery(this)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
-        Prefs.store(this).unregisterOnSharedPreferenceChangeListener(preferenceListener)
+        stopHeartbeat()
+        runningOrRequested = false
+        try {
+            Prefs.store(this).unregisterOnSharedPreferenceChangeListener(preferenceListener)
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "Preference listener cleanup failed: ${error.javaClass.simpleName}")
+        }
         removeNotification(this)
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun startHeartbeat() {
+        handler.removeCallbacks(heartbeat)
+        handler.postDelayed(heartbeat, HEARTBEAT_INTERVAL_MILLIS)
+    }
+
+    private fun stopHeartbeat() {
+        handler.removeCallbacks(heartbeat)
+    }
+
     private fun stopAndRemove() {
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopHeartbeat()
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "Foreground removal failed: ${error.javaClass.simpleName}")
+        }
         removeNotification(this)
         stopSelf()
     }
 
     companion object {
         private const val TAG = "OptionalKeepAlive"
+        private const val HEARTBEAT_INTERVAL_MILLIS = 5 * 60 * 1000L
         const val CHANNEL_ID = "notification_listener_keepalive"
         const val NOTIFICATION_ID = 0x4b41
+
+        @Volatile
+        private var runningOrRequested = false
 
         @Synchronized
         fun startIfEnabled(context: Context): Boolean {
             val appContext = context.applicationContext
             if (!Prefs.isKeepAliveEnabled(appContext)) return false
+            if (runningOrRequested) return true
             return try {
+                runningOrRequested = true
                 val intent = Intent(appContext, OptionalKeepAliveService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     appContext.startForegroundService(intent)
@@ -89,16 +139,24 @@ class OptionalKeepAliveService : Service() {
                 }
                 true
             } catch (error: ForegroundServiceStartNotAllowedException) {
+                runningOrRequested = false
                 Log.w(TAG, "Foreground start not allowed by current system state")
                 false
             } catch (error: SecurityException) {
+                runningOrRequested = false
                 Log.w(TAG, "Foreground start rejected by permission or service-type policy")
                 false
             } catch (error: IllegalStateException) {
+                runningOrRequested = false
                 Log.w(TAG, "Foreground start rejected while app is backgrounded")
                 false
             } catch (error: RuntimeException) {
+                runningOrRequested = false
                 Log.w(TAG, "Foreground start failed: ${error.javaClass.simpleName}")
+                false
+            } catch (error: LinkageError) {
+                runningOrRequested = false
+                Log.w(TAG, "Foreground start API unavailable: ${error.javaClass.simpleName}")
                 false
             }
         }
@@ -106,28 +164,34 @@ class OptionalKeepAliveService : Service() {
         @Synchronized
         fun stop(context: Context) {
             val appContext = context.applicationContext
+            runningOrRequested = false
             try {
                 appContext.stopService(Intent(appContext, OptionalKeepAliveService::class.java))
             } catch (error: RuntimeException) {
                 Log.w(TAG, "Foreground stop failed: ${error.javaClass.simpleName}")
+            } catch (error: LinkageError) {
+                Log.w(TAG, "Foreground stop API unavailable: ${error.javaClass.simpleName}")
             } finally {
                 removeNotification(appContext)
             }
         }
 
         fun ensureChannel(context: Context) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-            val manager = context.getSystemService(NotificationManager::class.java) ?: return
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL_ID,
-                    "通知监听保活",
-                    NotificationManager.IMPORTANCE_LOW,
-                ).apply {
-                    description = "用户可选的通知监听前台保活状态"
-                    setShowBadge(false)
-                }
-            )
+            try {
+                val manager = context.getSystemService(NotificationManager::class.java) ?: return
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        "通知监听保活",
+                        NotificationManager.IMPORTANCE_LOW,
+                    ).apply {
+                        description = "用户可选的通知监听前台保活状态"
+                        setShowBadge(false)
+                    }
+                )
+            } catch (error: RuntimeException) {
+                Log.w(TAG, "Notification channel setup failed: ${error.javaClass.simpleName}")
+            }
         }
 
         private fun buildNotification(context: Context): Notification {
@@ -143,7 +207,7 @@ class OptionalKeepAliveService : Service() {
             return Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_wechat)
                 .setContentTitle("通知监听保活中")
-                .setContentText("点按打开设置；此功能只能降低被系统终止的概率")
+                .setContentText("系统会低频健康检查并在断开时请求监听重绑定")
                 .setContentIntent(pendingIntent)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .setOngoing(true)
@@ -153,7 +217,11 @@ class OptionalKeepAliveService : Service() {
         }
 
         private fun removeNotification(context: Context) {
-            context.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+            try {
+                context.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+            } catch (error: RuntimeException) {
+                Log.w(TAG, "Keep-alive notification cleanup failed: ${error.javaClass.simpleName}")
+            }
         }
     }
 }

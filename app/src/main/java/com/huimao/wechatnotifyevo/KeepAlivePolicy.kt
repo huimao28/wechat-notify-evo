@@ -12,13 +12,32 @@ internal object KeepAlivePreferencePolicy {
 /** Applies one user toggle in a deterministic order. */
 internal class KeepAliveTransition(
     private val writePreference: (Boolean) -> Unit,
-    private val startService: () -> Unit,
-    private val stopService: () -> Unit,
+    private val enableKeepAlive: () -> Unit,
+    private val disableKeepAlive: () -> Unit,
 ) {
     fun setEnabled(enabled: Boolean) {
-        // Persist first: a concurrently created/restarted service always observes
-        // the user's latest choice. Disabling then stops and removes it immediately.
+        // Persist first so services and already-running jobs see the new choice.
         writePreference(enabled)
-        if (enabled) startService() else stopService()
+        if (enabled) enableKeepAlive() else disableKeepAlive()
+    }
+}
+
+/** Android-free scheduling decision used by the coordinator and unit tests. */
+internal object KeepAliveSchedulingPolicy {
+    fun reconcile(enabled: Boolean, schedule: () -> Unit, cancel: () -> Unit) {
+        if (enabled) schedule() else cancel()
+    }
+}
+
+/** Thread-safe monotonic-time gate preventing repeated listener rebind requests. */
+internal class RebindCooldown(private val cooldownMillis: Long) {
+    private var lastRequestAt = Long.MIN_VALUE
+
+    @Synchronized
+    fun tryAcquire(nowMillis: Long): Boolean {
+        val elapsed = if (lastRequestAt == Long.MIN_VALUE) Long.MAX_VALUE else nowMillis - lastRequestAt
+        if (elapsed < 0 || elapsed < cooldownMillis) return false
+        lastRequestAt = nowMillis
+        return true
     }
 }

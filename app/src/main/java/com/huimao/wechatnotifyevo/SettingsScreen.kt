@@ -172,8 +172,8 @@ fun SettingsRoute() {
             KeepAliveTransition(
                 writePreference = { Prefs.setKeepAliveEnabled(context, it) },
                 // This callback is invoked only by the visible settings Activity.
-                startService = { started = OptionalKeepAliveService.startIfEnabled(context) },
-                stopService = { OptionalKeepAliveService.stop(context) },
+                enableKeepAlive = { started = KeepAliveCoordinator.enable(context) },
+                disableKeepAlive = { KeepAliveCoordinator.disable(context) },
             ).setEnabled(requested)
             keepAliveEnabled = Prefs.isKeepAliveEnabled(context)
             if (requested && !started) {
@@ -343,7 +343,7 @@ private fun KeepAliveSection(state: SettingsUiState, actions: SettingsActions) {
     ) {
         SwitchItem(
             "前台保活（可选）",
-            "默认关闭。开启会显示常驻低优先级通知；只能降低通知监听被系统终止的概率，不能保证保活。",
+            "默认关闭。开启会显示常驻低优先级通知，并启用系统调度健康检查与断线监听重绑定；只能提高存活率，不能保证不被系统终止。",
             state.keepAliveEnabled,
             actions.setKeepAliveEnabled,
         )

@@ -64,6 +64,11 @@
                 android:value="User-opted persistent notification to improve availability of the app's notification-listener service; no data transfer or sensitive notification processing occurs in this foreground service." />
         </service>
 
+        <service
+            android:name=".KeepAliveHealthJobService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <receiver
             android:name=".KeepAliveRestoreReceiver"
             android:directBootAware="false"

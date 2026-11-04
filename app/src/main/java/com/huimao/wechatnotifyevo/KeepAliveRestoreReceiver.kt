@@ -11,11 +11,9 @@ class KeepAliveRestoreReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
         ) return
-        if (!Prefs.isKeepAliveEnabled(context)) return
-
-        // These two broadcasts are documented background-FGS start exemptions.
-        // OEM policy can still reject the start; the controller catches that safely.
-        if (!OptionalKeepAliveService.startIfEnabled(context)) {
+        // Both persisted scheduling and best-effort FGS restoration are centralized.
+        // OEM policy can still reject the start; the coordinator contains failures.
+        if (!KeepAliveCoordinator.restoreIfEnabled(context) && Prefs.isKeepAliveEnabled(context)) {
             Log.w(TAG, "Deferred foreground restore; system did not allow this start")
         }
     }
