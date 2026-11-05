@@ -3,25 +3,30 @@ package com.huimao.wechatnotifyevo
 import android.app.PendingIntent
 import android.os.Process
 
-/** Decisions are deliberately based only on public Android user handles. */
-enum class UserIsolationDecision { PROCESS, IGNORE_SOURCE_USER, IGNORE_CREATOR_USER }
+/** Decisions are deliberately based only on public Android user identifiers. */
+enum class UserIsolationDecision { PROCESS, IGNORE_SOURCE_USER }
 
 object UserIsolationPolicy {
-    /** Unknown/system creator is allowed; a known different creator is rejected. */
+    /**
+     * Fail open for Android system/unknown negative source ids. Only a concrete,
+     * non-negative source id belonging to another Android user is rejected.
+     * creatorUserId is diagnostic-only because OEMs may proxy PendingIntents.
+     */
+    @Suppress("UNUSED_PARAMETER")
     fun decide(sourceUserId: Int, currentUserId: Int, creatorUserId: Int?): UserIsolationDecision = when {
-        sourceUserId != currentUserId -> UserIsolationDecision.IGNORE_SOURCE_USER
-        creatorUserId != null && creatorUserId != currentUserId -> UserIsolationDecision.IGNORE_CREATOR_USER
-        else -> UserIsolationDecision.PROCESS
+        sourceUserId < 0 -> UserIsolationDecision.PROCESS
+        sourceUserId == currentUserId -> UserIsolationDecision.PROCESS
+        else -> UserIsolationDecision.IGNORE_SOURCE_USER
     }
+
+    /** Unknown/system sources are stored as the current user for all later routing. */
+    fun normalizeSourceUserId(sourceUserId: Int, currentUserId: Int): Int =
+        if (sourceUserId < 0) currentUserId else sourceUserId
 }
 
 object CurrentUserScope {
-    // Android allocates each user a fixed UID range. The listener's strict gate
-    // also compares UserHandle objects, whose equality is identifier-based.
     private const val PER_USER_RANGE = 100_000
     fun id(): Int = Process.myUid() / PER_USER_RANGE
-
-    fun isCurrent(handle: android.os.UserHandle): Boolean = handle == Process.myUserHandle()
 
     fun creatorUserHandle(pendingIntent: PendingIntent?): android.os.UserHandle? {
         if (pendingIntent == null) return null
@@ -33,18 +38,27 @@ object CurrentUserScope {
         }
     }
 
-    /** Used only for content-free logging; UserHandle equality makes the decision. */
-    fun creatorUserId(pendingIntent: PendingIntent?): Int? =
-        creatorUserHandle(pendingIntent)?.hashCode()
+    /** Diagnostic only. creatorUid is public and avoids treating hashCode as an id. */
+    fun creatorUserId(pendingIntent: PendingIntent?): Int? {
+        if (pendingIntent == null) return null
+        return try {
+            pendingIntent.creatorUid.takeIf { it >= 0 }?.div(PER_USER_RANGE)
+        } catch (_: RuntimeException) {
+            null
+        }
+    }
 
     fun accepts(sourceUserId: Int, pendingIntent: PendingIntent?): Boolean =
-        sourceUserId == id() && creatorUserHandle(pendingIntent)?.let(::isCurrent) != false
+        UserIsolationPolicy.decide(sourceUserId, id(), creatorUserId(pendingIntent)) ==
+            UserIsolationDecision.PROCESS
 
-    fun accepts(conv: Conversation): Boolean =
-        ConversationStore.get(conv.nid, conv.sourceUserId) === conv && conv.sourceUserId == id() &&
+    fun accepts(conv: Conversation): Boolean = accepts(conv, id())
+
+    internal fun accepts(conv: Conversation, currentUserId: Int): Boolean =
+        ConversationStore.get(conv.nid, conv.sourceUserId) === conv &&
             UserIsolationPolicy.decide(
                 conv.sourceUserId,
-                id(),
+                currentUserId,
                 creatorUserId(conv.contentIntent),
             ) == UserIsolationDecision.PROCESS
 }

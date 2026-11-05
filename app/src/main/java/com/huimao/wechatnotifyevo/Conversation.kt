@@ -82,17 +82,31 @@ object ConversationStore {
     private data class Key(val sourceUserId: Int, val nid: Int)
     private val map = HashMap<Key, Conversation>()
 
-    fun getOrCreate(nid: Int, title: String, sourceUserId: Int): Conversation {
-        val key = Key(sourceUserId, nid)
+    private fun normalizedUserId(sourceUserId: Int, currentUserId: Int?): Int {
+        if (sourceUserId >= 0) return sourceUserId
+        return UserIsolationPolicy.normalizeSourceUserId(
+            sourceUserId,
+            requireNotNull(currentUserId) { "currentUserId is required for an unknown source user" },
+        )
+    }
+
+    fun getOrCreate(
+        nid: Int,
+        title: String,
+        sourceUserId: Int,
+        currentUserId: Int? = null,
+    ): Conversation {
+        val normalizedUserId = normalizedUserId(sourceUserId, currentUserId)
+        val key = Key(normalizedUserId, nid)
         val existing = map[key]
         if (existing != null && existing.title != title) {
-            remove(nid, sourceUserId)
-            val fresh = Conversation(nid, sourceUserId)
+            remove(nid, normalizedUserId)
+            val fresh = Conversation(nid, normalizedUserId)
             fresh.title = title
             map[key] = fresh
             return fresh
         }
-        return existing ?: Conversation(nid, sourceUserId).also {
+        return existing ?: Conversation(nid, normalizedUserId).also {
             it.title = title
             map[key] = it
         }
