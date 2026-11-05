@@ -196,7 +196,9 @@ class WeChatListenerService : NotificationListenerService() {
         // Keep the last known avatar: WeChat posts no large icon for a
         // multi-sender group message, and overwriting with null would
         // drop the avatar to the app icon on exactly those messages.
-        n.getLargeIcon()?.let { conv.largeIcon = it }
+        n.getLargeIcon()?.let {
+            conv.updateLargeIcon(this, it, Prefs.isCircularAvatarEnabled(this))
+        }
         conv.contentIntent = n.contentIntent
 
         // Prefer the car-extender unread conversation when WeChat provides

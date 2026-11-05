@@ -92,12 +92,12 @@ object NotificationFactory {
      * and service accounts reuse the chat avatar as the sender avatar; group
      * senders have no per-sender avatar from WeChat, so they get none.
      */
-    private fun messagePerson(conv: Conversation, sender: String): Person {
+    private fun messagePerson(conv: Conversation, sender: String, avatar: Icon?): Person {
         val builder = Person.Builder()
             .setName(sender)
             .setKey("sender_${conv.nid}_$sender")
         if (conv.type != ConversationType.GROUP) {
-            conv.largeIcon?.let { builder.setIcon(it) }
+            avatar?.let { builder.setIcon(it) }
         }
         return builder.build()
     }
@@ -129,12 +129,13 @@ object NotificationFactory {
         silent: Boolean,
     ): Notification {
         require(CurrentUserScope.accepts(conv)) { "conversation is outside current user" }
+        val avatar = conv.displayLargeIcon(Prefs.isCircularAvatarEnabled(context))
         val style = Notification.MessagingStyle(context.getString(R.string.self_display_name))
         for (msg in conv.messages.takeLast(20)) {
             if (msg.sender != null &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
             ) {
-                style.addMessage(msg.text, msg.timestamp, messagePerson(conv, msg.sender))
+                style.addMessage(msg.text, msg.timestamp, messagePerson(conv, msg.sender, avatar))
             } else {
                 // Self messages (null sender) and pre-9 devices: plain text sender.
                 style.addMessage(msg.text, msg.timestamp, msg.sender)
@@ -179,7 +180,7 @@ object NotificationFactory {
                     .build()
             )
         }
-        conv.largeIcon?.let { builder.setLargeIcon(it) }
+        avatar?.let { builder.setLargeIcon(it) }
         val unread = if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size
         if (unread > 0) builder.setNumber(unread)
 

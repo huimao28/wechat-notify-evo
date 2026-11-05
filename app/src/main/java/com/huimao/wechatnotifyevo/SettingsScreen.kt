@@ -69,6 +69,7 @@ private data class SettingsUiState(
     val groupEnabled: Boolean,
     val keepAliveEnabled: Boolean,
     val directChatEnabled: Boolean,
+    val circularAvatarEnabled: Boolean,
     val iconChoice: String,
     val hasCustomIcon: Boolean,
     val learningBusy: Boolean,
@@ -85,6 +86,7 @@ private data class SettingsActions(
     val openBatteryOptimization: () -> Unit = {},
     val openAppDetails: () -> Unit = {},
     val setDirectChatEnabled: (Boolean) -> Unit = {},
+    val setCircularAvatarEnabled: (Boolean) -> Unit = {},
     val setIconChoice: (String) -> Unit = {},
     val chooseCustomIcon: () -> Unit = {},
     val learnConversation: (Conversation, String) -> Unit = { _, _ -> },
@@ -103,6 +105,7 @@ fun SettingsRoute() {
     var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
     var keepAliveEnabled by remember { mutableStateOf(Prefs.isKeepAliveEnabled(context)) }
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
+    var circularAvatarEnabled by remember { mutableStateOf(Prefs.isCircularAvatarEnabled(context)) }
     var directChatEnabled by remember { mutableStateOf(Prefs.isDirectChatEnabled(context)) }
     var confirmDirectChat by rememberSaveable { mutableStateOf(false) }
     var showIconDialog by rememberSaveable { mutableStateOf(false) }
@@ -152,6 +155,7 @@ fun SettingsRoute() {
         groupEnabled = groupEnabled,
         keepAliveEnabled = keepAliveEnabled,
         directChatEnabled = directChatEnabled,
+        circularAvatarEnabled = circularAvatarEnabled,
         iconChoice = iconChoice,
         hasCustomIcon = CustomNotificationIcon.load(context) != null,
         learningBusy = ManualConversationLearning.busy,
@@ -204,6 +208,14 @@ fun SettingsRoute() {
                 directChatEnabled = false
                 repostConversations()
             }
+        },
+        setCircularAvatarEnabled = { enabled ->
+            circularAvatarEnabled = enabled
+            Prefs.setCircularAvatarEnabled(context, enabled)
+            ConversationStore.allForUser(CurrentUserScope.id())
+                .filter(CurrentUserScope::accepts)
+                .forEach { it.rebuildLargeIcon(context, enabled) }
+            repostConversations()
         },
         setIconChoice = { iconChoice = it; Prefs.setIconChoice(context, it); repostConversations() },
         chooseCustomIcon = { imageLauncher.launch("image/*") },
@@ -292,7 +304,7 @@ private fun SettingsScreen(
             item { CoreSection(state, actions) }
             item { KeepAliveSection(state, actions) }
             item { DirectChatSection(state, actions) }
-            item { AppearanceSection(state, onShowIconDialog) }
+            item { AppearanceSection(state, actions, onShowIconDialog) }
             item { DiagnosticsSection(state, actions, onShowLearningChoices) }
         }
     }
@@ -390,8 +402,19 @@ private fun DirectChatSection(state: SettingsUiState, actions: SettingsActions) 
 }
 
 @Composable
-private fun AppearanceSection(state: SettingsUiState, onShowIconDialog: () -> Unit) {
+private fun AppearanceSection(
+    state: SettingsUiState,
+    actions: SettingsActions,
+    onShowIconDialog: () -> Unit,
+) {
     SectionCard("外观") {
+        SwitchItem(
+            "圆形头像兼容",
+            "默认开启。把微信方形头像中心裁剪成圆形透明位图，改善部分厂商的通知头像显示；关闭后使用微信原头像。",
+            state.circularAvatarEnabled,
+            actions.setCircularAvatarEnabled,
+        )
+        HorizontalDivider()
         ListItem(
             headlineContent = { Text("通知小图标") },
             supportingContent = { Text("修改状态栏小图标；头像角标由系统绘制，无法保证同步改变") },
@@ -641,6 +664,7 @@ private val previewState = SettingsUiState(
     groupEnabled = true,
     keepAliveEnabled = false,
     directChatEnabled = false,
+    circularAvatarEnabled = true,
     iconChoice = Prefs.ICON_DEFAULT,
     hasCustomIcon = false,
     learningBusy = false,

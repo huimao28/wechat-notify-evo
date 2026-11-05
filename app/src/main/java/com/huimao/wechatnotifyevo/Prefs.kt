@@ -10,6 +10,7 @@ object Prefs {
     private const val KEY_REPLY = "reply_enabled"
     private const val KEY_GROUP = "group_enabled"
     private const val KEY_ICON = "icon_choice"
+    private const val KEY_CIRCULAR_AVATAR = "circular_avatar_compat"
 
     // Keep these legacy keys for upgrades and for the already-verified runtime path.
     private const val KEY_BUBBLE = "bubble_enabled"
@@ -95,6 +96,13 @@ object Prefs {
 
     fun setIconChoice(context: Context, value: String) {
         prefs(context).edit().putString(KEY_ICON, value).apply()
+    }
+
+    fun isCircularAvatarEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_CIRCULAR_AVATAR, CircularAvatarPolicy.DEFAULT_ENABLED)
+
+    fun setCircularAvatarEnabled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_CIRCULAR_AVATAR, value).apply()
     }
 
     fun isKeepAliveEnabled(context: Context): Boolean =
