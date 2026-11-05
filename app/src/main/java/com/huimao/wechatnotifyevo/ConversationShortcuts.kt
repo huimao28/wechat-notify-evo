@@ -104,10 +104,11 @@ object ConversationShortcuts {
                 Log.w(TAG, "Shortcut refresh rate limited")
                 return
             }
+            val avatar = conv.displayLargeIcon(Prefs.isCircularAvatarEnabled(context))
             val person = Person.Builder()
                 .setName(conv.title)
                 .setKey("person_${conv.nid}")
-                .apply { conv.largeIcon?.let { setIcon(it) } }
+                .apply { avatar?.let { setIcon(it) } }
                 .build()
             val shortcut = ShortcutInfo.Builder(context, id)
                 .setShortLabel(conv.title)
@@ -117,7 +118,7 @@ object ConversationShortcuts {
                 .setPersons(arrayOf(person))
                 .setCategories(setOf("android.shortcut.conversation"))
                 .setLocusId(LocusId(shortcutId(conv)))
-                .apply { conv.largeIcon?.let { setIcon(it) } }
+                .apply { avatar?.let { setIcon(it) } }
                 .build()
             // pushDynamicShortcut evicts the lowest-ranked shortcut when
             // the system limit is reached, so no manual LRU is needed.

@@ -1,6 +1,7 @@
 package com.huimao.wechatnotifyevo
 
 import android.app.PendingIntent
+import android.content.Context
 import android.graphics.drawable.Icon
 
 /** One message inside a conversation. sender == null means "self". */
@@ -25,7 +26,35 @@ class Conversation(val nid: Int, val sourceUserId: Int) {
     var title: String = ""
     var type: ConversationType = ConversationType.UNKNOWN
     var smallIcon: Icon? = null
-    var largeIcon: Icon? = null
+    var originalLargeIcon: Icon? = null
+        private set
+    var processedLargeIcon: Icon? = null
+        private set
+
+    /** Converts once when captured; every notification surface then reuses the cached result. */
+    fun updateLargeIcon(context: Context, icon: Icon, circularEnabled: Boolean) {
+        originalLargeIcon = icon
+        processedLargeIcon = if (circularEnabled) AvatarIconProcessor.circularize(context, icon) else null
+        shortcutPushed = false
+    }
+
+    /** Rebuilds from the retained source when the compatibility preference changes. */
+    fun rebuildLargeIcon(context: Context, circularEnabled: Boolean) {
+        processedLargeIcon = if (circularEnabled) {
+            originalLargeIcon?.let { AvatarIconProcessor.circularize(context, it) }
+        } else {
+            null
+        }
+        shortcutPushed = false
+    }
+
+    fun displayLargeIcon(circularEnabled: Boolean): Icon? =
+        if (CircularAvatarPolicy.useProcessed(circularEnabled, processedLargeIcon != null)) {
+            processedLargeIcon
+        } else {
+            originalLargeIcon
+        }
+
     var contentIntent: PendingIntent? = null
     // A fresh opaque generation for every notification snapshot, never a chat identifier.
     var snapshotToken: String = java.util.UUID.randomUUID().toString()
