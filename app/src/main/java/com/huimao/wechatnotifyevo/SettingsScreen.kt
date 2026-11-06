@@ -56,6 +56,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -486,8 +489,9 @@ private fun AboutSection(onOpenAbout: () -> Unit) {
         ListItem(
             headlineContent = { Text(stringResource(R.string.about_title)) },
             supportingContent = { Text(stringResource(R.string.settings_about_summary)) },
-            trailingContent = { Text("›", style = MaterialTheme.typography.titleLarge) },
-            modifier = Modifier.clickable(onClick = onOpenAbout),
+            modifier = Modifier
+                .clickable(onClick = onOpenAbout)
+                .semantics { role = Role.Button },
             colors = transparentListItemColors(),
         )
     }

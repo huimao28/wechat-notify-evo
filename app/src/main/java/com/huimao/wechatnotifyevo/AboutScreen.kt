@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,22 +27,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val versionName = remember(context) {
-        runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull().orEmpty()
-    }
+    val versionName = BuildConfig.VERSION_NAME
     val projectUrl = stringResource(R.string.about_project_url)
 
     Scaffold(
@@ -55,7 +57,8 @@ fun AboutScreen(onBack: () -> Unit) {
             )
         },
     ) { innerPadding ->
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 360.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .consumeWindowInsets(innerPadding),
@@ -65,9 +68,10 @@ fun AboutScreen(onBack: () -> Unit) {
                 end = 16.dp,
                 bottom = innerPadding.calculateBottomPadding() + 24.dp,
             ),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -78,7 +82,11 @@ fun AboutScreen(onBack: () -> Unit) {
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            stringResource(R.string.app_name),
+                            modifier = Modifier.semantics { heading() },
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
                         Text(
                             stringResource(R.string.about_version, versionName),
                             style = MaterialTheme.typography.labelLarge,
@@ -96,8 +104,9 @@ fun AboutScreen(onBack: () -> Unit) {
                     ListItem(
                         headlineContent = { Text(projectUrl) },
                         supportingContent = { Text(stringResource(R.string.about_project_summary)) },
-                        trailingContent = { Text("↗") },
-                        modifier = Modifier.clickable { context.openWebUrl(projectUrl) },
+                        modifier = Modifier
+                            .clickable { context.openWebUrl(projectUrl) }
+                            .semantics { role = Role.Button },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
@@ -112,7 +121,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     )
                 }
             }
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 AboutCard(stringResource(R.string.about_acknowledgements_title)) {
                     Column(
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
@@ -142,11 +151,22 @@ private fun AboutCard(title: String, content: @Composable () -> Unit) {
         Column {
             Text(
                 title,
-                modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp),
+                modifier = Modifier
+                    .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
+                    .semantics { heading() },
                 style = MaterialTheme.typography.titleLarge,
             )
             content()
         }
+    }
+}
+
+@Preview(name = "About - Phone", widthDp = 412, heightDp = 892, showBackground = true)
+@Preview(name = "About - Tablet", widthDp = 840, heightDp = 900, showBackground = true)
+@Composable
+private fun AboutScreenPreview() {
+    WeChatNotifyEvoTheme(dynamicColor = false) {
+        AboutScreen(onBack = {})
     }
 }
 
