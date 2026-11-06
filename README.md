@@ -82,5 +82,13 @@
 
 ## 致谢与来源
 
-设计参考 Nevolution 官方微信装饰器（`Nevolution/decorator-wechat`，Apache 2.0）的
-会话归档、计数前缀、发送者切分和 car-extender 转发思路；本应用为独立重写。
+- 感谢 Oasis Feng 开发 [Nevolution](https://github.com/Nevolution)（中文名“女娲石·通知进化”），
+  以及由此推动的通知进化理念与生态。“女娲石”在此指 Nevolution，并非另一位个人。
+- 感谢 Nevolution 官方[微信通知进化实现/插件](https://github.com/Nevolution/decorator-wechat)
+  （Apache 2.0）在会话归档、计数前缀、发送者切分和 car-extender 转发等方面带来的探索与启发；
+  本应用为独立重写。
+- 感谢 ichenhe 的 [QQ-Notify-Evolution（企鹅通知进化）](https://github.com/ichenhe/QQ-Notify-Evolution)
+  带来的开源参考。
+- 感谢参与测试、反馈、逆向排查与兼容验证的社区用户和贡献者。
+
+以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。

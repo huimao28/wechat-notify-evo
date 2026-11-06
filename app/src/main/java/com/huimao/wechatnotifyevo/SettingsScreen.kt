@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -96,7 +97,7 @@ private data class SettingsActions(
 )
 
 @Composable
-fun SettingsRoute() {
+fun SettingsRoute(onOpenAbout: () -> Unit) {
     val context = LocalContext.current
     var listenerGranted by remember { mutableStateOf(false) }
     var postGranted by remember { mutableStateOf(false) }
@@ -240,6 +241,7 @@ fun SettingsRoute() {
                 .filter { CurrentUserScope.accepts(it) && it.contentIntent != null }
                 .sortedByDescending { it.notificationPostTime }.map { it to it.snapshotToken }
         },
+        onOpenAbout = onOpenAbout,
     )
 
     if (confirmDirectChat) DirectChatRiskDialog(
@@ -281,6 +283,7 @@ private fun SettingsScreen(
     actions: SettingsActions,
     onShowIconDialog: () -> Unit,
     onShowLearningChoices: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("微信通知进化") }) },
@@ -306,6 +309,7 @@ private fun SettingsScreen(
             item { DirectChatSection(state, actions) }
             item { AppearanceSection(state, actions, onShowIconDialog) }
             item { DiagnosticsSection(state, actions, onShowLearningChoices) }
+            item { AboutSection(onOpenAbout) }
         }
     }
 }
@@ -473,6 +477,19 @@ private fun DiagnosticsSection(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+}
+
+@Composable
+private fun AboutSection(onOpenAbout: () -> Unit) {
+    SectionCard(stringResource(R.string.settings_other_title)) {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.about_title)) },
+            supportingContent = { Text(stringResource(R.string.settings_about_summary)) },
+            trailingContent = { Text("›", style = MaterialTheme.typography.titleLarge) },
+            modifier = Modifier.clickable(onClick = onOpenAbout),
+            colors = transparentListItemColors(),
+        )
     }
 }
 
@@ -676,6 +693,6 @@ private val previewState = SettingsUiState(
 @Composable
 private fun SettingsScreenPreview() {
     WeChatNotifyEvoTheme(dynamicColor = false) {
-        SettingsScreen(previewState, SettingsActions(), {}, {})
+        SettingsScreen(previewState, SettingsActions(), {}, {}, {})
     }
 }
