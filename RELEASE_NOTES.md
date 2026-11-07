@@ -1,26 +1,20 @@
-微信通知进化 **v1.0.19-beta.3** 预发行版（正式签名 APK）。
+微信通知进化 **v1.0.19** 正式版（正式签名 APK）。
 
 ## 新增与变更
 
-- **圆形头像兼容**：新增默认开启的外观设置，将微信方形头像 center-crop 后渲染成四角透明的圆形位图，改善部分厂商通知头像显示；关闭后使用微信原头像。
-- 处理后的头像统一用于通知 `largeIcon`、非群聊 `Person`、会话 shortcut 与气泡图标来源；群聊仍不虚构单独 sender 头像，微信 badge/小图标逻辑不变。
-- 会话同时保留原始头像与已处理头像，并在写入会话时只转换一次；切换设置会从原图安全重建、刷新 shortcut 并静默重发当前会话。
-- 新增默认值、开关回退、输出尺寸与横/竖图 center-crop 几何的单元测试。
-- 保留 beta.2 的可选后台保活、标准 Android 用户空间隔离，以及 v1.0.18 的气泡内直达聊天等功能。
+- **Android Auto 会话展示**：进化通知现在声明 Android Auto 通知能力，并完整提供 `MessagingStyle`、消息 `Person`、`CATEGORY_MESSAGE`、时间、有效的微信原 `contentIntent`、群聊标题/标记及长效会话 shortcut。
+- **安全动作桥接**：优先读取微信原通知公开的标准 `Notification.Action` + `RemoteInput`，其次读取平台 `CarExtender` unread conversation；回复的 `resultKey` 和微信原 `PendingIntent` 原样复用。回复/已读取决于微信原通知是否提供入口；没有入口时 Android Auto 只展示会话，不显示动作，也不调用微信未导出 Receiver。
+- 继续读取微信原通知公开的 `CarExtender` 兼容数据；平台 API 不提供 unread conversation 构建器，因此不写私有 Bundle 键，也不为此引入 AndroidX Core 大改，现代 Android Auto 由 `MessagingStyle` 与标准动作消费。
+- 合并“关于/致谢”页面，展示版本、项目地址、许可现状与准确致谢。当前仓库没有 LICENSE 文件，页面如实说明未提供项目许可文本。
+- 保留 v1.0.19 beta 系列的圆形头像兼容、标准 Android 用户空间隔离、可选后台保活与气泡内直达聊天。
 
-## 性能、画质与安全边界
+## 行为与安全边界
 
-- 输出为 `ARGB_8888`，最长边限制为 256 px；两个渲染位图各不超过约 256 KiB。已知尺寸小于上限的头像不会被放大，非正方形图像从中心等量裁边。
-- bitmap/adaptive bitmap/resource 类型优先通过 `loadDrawable` 后在受限目标中绘制；来源尺寸超过 8192 px 或约 1678 万像素时拒绝处理并回退原 `Icon`。
-- `TYPE_DATA` 无法通过公开 API 在解码前安全探测边界，URI 类型可能涉及外部授权或 provider/network 工作，因此均不主动读取，直接回退原 `Icon`。转换异常也只回退，不影响通知。
+- Android Auto 通知点击只使用微信原通知的 `contentIntent`；缺少该入口时不替换原通知。
+- 车载适配不会额外触发自动气泡学习或主动打开微信。现有“气泡内直达聊天”开关与通知到达触发逻辑保持不变；开启时首次新会话仍可能按既有限频策略短暂打开微信，关闭时不会学习。
+- 不新增车载开关，不引入 AndroidX Core 或 Car App Library；实现只使用公开平台通知 API。
+- 回复/已读入口、Android Auto 最终展示及语音回复能力仍取决于微信版本、Android Auto 与车机实现。
 
-## 限制与厂商设置
+## 安装与测试
 
-- 圆形头像兼容改善的是系统拿到的头像位图；最终裁切、角标和展示形态仍由 Android 与厂商通知 UI 决定。
-- 保活只提高存活率，不能保证进程不被 Android 或厂商系统终止；ColorOS、MagicOS 等仍建议允许自启动、后台运行并设为不优化电池。
-- 用户空间隔离只适用于明确不同 UserHandle 的标准独立用户或工作资料；ColorOS 同用户分身无法可靠区分。
-- 气泡显示/嵌入、直接回复和标为已读仍取决于系统与微信提供的数据。
-
-## 安装
-
-下载 `app-release.apk`，授予通知使用权（Android 13+ 还需通知权限），并按需允许气泡。若设备上安装的是早期 debug 签名版，签名不同将无法覆盖安装。
+下载 `app-release.apk`，授予通知使用权（Android 13+ 还需通知权限）。建议分别测试 Android Auto 有线和无线连接：有合法回复入口时验证语音回复与已读；无入口时预期只展示会话。若设备上安装的是早期 debug 签名版，签名不同将无法覆盖安装。

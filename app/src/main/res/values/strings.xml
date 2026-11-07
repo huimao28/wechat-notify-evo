@@ -11,4 +11,22 @@
     <string name="action_reply">回复</string>
     <string name="action_mark_read">标为已读</string>
     <string name="self_display_name">我</string>
+
+    <string name="settings_other_title">其他</string>
+    <string name="settings_about_summary">版本、项目地址、许可状态与致谢</string>
+    <string name="about_title">关于</string>
+    <string name="about_back">返回</string>
+    <string name="about_version">版本 %1$s</string>
+    <string name="about_description">将微信通知转换为现代 Messaging 样式，提供会话聚合与 Android Auto 会话展示；回复/已读取决于微信原通知是否提供入口。</string>
+    <string name="about_project_title">项目地址</string>
+    <string name="about_project_url">https://github.com/huimao28/wechat-notify-evo</string>
+    <string name="about_project_summary">在浏览器中查看项目仓库</string>
+    <string name="about_license_title">开源许可</string>
+    <string name="about_license_missing">当前仓库未提供 LICENSE 文件，暂无可跳转的项目许可文本。</string>
+    <string name="about_acknowledgements_title">致谢</string>
+    <string name="about_acknowledgement_nevolution">感谢 Oasis Feng 开发 Nevolution（“女娲石·通知进化”），以及由此推动的通知进化理念与生态；也感谢 Nevolution 官方微信通知进化实现/插件带来的探索与启发。</string>
+    <string name="about_acknowledgement_qq">感谢 ichenhe 的 QQ-Notify-Evolution（企鹅通知进化）项目带来的开源参考。</string>
+    <string name="about_acknowledgement_community">感谢参与测试、反馈、逆向排查与兼容验证的社区用户和贡献者。</string>
+    <string name="about_acknowledgement_disclaimer">以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。</string>
+    <string name="about_open_link_failed">未找到可打开此链接的应用</string>
 </resources>

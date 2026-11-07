@@ -47,6 +47,63 @@ class WeChatListenerService : NotificationListenerService() {
         return normalized
     }
 
+    /**
+     * Select only public, notification-supplied reply/read entry points. The
+     * selected opaque PendingIntents are stored unchanged; no WeChat receiver
+     * is discovered or synthesized.
+     */
+    private fun captureBridgeActions(notification: Notification, conv: Conversation) {
+        val actions = notification.actions?.toList().orEmpty()
+        val standard = actions.mapIndexed { index, action ->
+            val inputs = action.remoteInputs?.toList().orEmpty()
+            ActionCandidate(
+                index = index,
+                hasPendingIntent = action.actionIntent != null,
+                remoteInputResultKeys = inputs.map { it.resultKey },
+                allowsFreeFormInput = inputs.any { it.allowFreeFormInput },
+                semanticAction = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    action.semanticAction
+                } else 0,
+            )
+        }
+        val car = Notification.CarExtender(notification).unreadConversation
+        val carRemoteInput = car?.remoteInput
+        val selection = AndroidAutoActionPolicy.select(
+            standard = standard,
+            carReply = carRemoteInput?.let {
+                ActionCandidate(-1, car.replyPendingIntent != null, listOf(it.resultKey), it.allowFreeFormInput)
+            },
+            carRead = car?.let { ActionCandidate(-2, it.readPendingIntent != null) },
+        )
+
+        conv.replyPendingIntent = null
+        conv.replyRemoteInputs = emptyList()
+        conv.replySourceAction = null
+        conv.readPendingIntent = null
+        conv.readSourceAction = null
+
+        selection.reply?.let { selected ->
+            if (selected.source == ActionBridgeSource.STANDARD) {
+                val source = actions[selected.index]
+                conv.replyPendingIntent = source.actionIntent
+                conv.replyRemoteInputs = source.remoteInputs?.toList().orEmpty()
+                conv.replySourceAction = source
+            } else {
+                conv.replyPendingIntent = car?.replyPendingIntent
+                conv.replyRemoteInputs = listOfNotNull(carRemoteInput)
+            }
+        }
+        selection.markRead?.let { selected ->
+            if (selected.source == ActionBridgeSource.STANDARD) {
+                val source = actions[selected.index]
+                conv.readPendingIntent = source.actionIntent
+                conv.readSourceAction = source
+            } else {
+                conv.readPendingIntent = car?.readPendingIntent
+            }
+        }
+    }
+
     /** PendingIntent creators are diagnostic-only: OEMs may proxy or remap them. */
     private fun logCreatorUser(sourceUserId: Int, notification: Notification?) {
         val currentUserId = CurrentUserScope.id()
@@ -151,6 +208,9 @@ class WeChatListenerService : NotificationListenerService() {
         val n = sbn.notification ?: return
         logCreatorUser(sourceUserId, n)
         if (!Prefs.isEnabled(this)) return
+        // Android Auto and phone taps must use WeChat's exact public entry.
+        // If it is absent, leave the original notification untouched.
+        if (n.contentIntent == null) return
         if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) return
         // WeChat's own group summary: drop it, our own summary replaces it.
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) {
@@ -200,16 +260,15 @@ class WeChatListenerService : NotificationListenerService() {
             conv.updateLargeIcon(this, it, Prefs.isCircularAvatarEnabled(this))
         }
         conv.contentIntent = n.contentIntent
+        captureBridgeActions(n, conv)
 
         // Prefer the car-extender unread conversation when WeChat provides
-        // one: it carries the authoritative message list plus the reply/read
-        // intents that make direct reply and mark-as-read possible.
+        // one: it carries an authoritative public message list. Action entry
+        // points were selected above from standard actions first, then this
+        // extender, without reconstructing any internal WeChat intent.
         val carExt = Notification.CarExtender(n).unreadConversation
         var usedCarExtMessages = false
         if (carExt != null) {
-            conv.replyPendingIntent = carExt.replyPendingIntent
-            conv.readPendingIntent = carExt.readPendingIntent
-            conv.remoteInputResultKey = carExt.remoteInput?.resultKey
             val extMessages = carExt.messages
             if (!extMessages.isNullOrEmpty()) {
                 usedCarExtMessages = true

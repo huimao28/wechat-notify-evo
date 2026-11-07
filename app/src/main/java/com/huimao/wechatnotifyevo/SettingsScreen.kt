@@ -55,6 +55,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -96,7 +100,7 @@ private data class SettingsActions(
 )
 
 @Composable
-fun SettingsRoute() {
+fun SettingsRoute(onOpenAbout: () -> Unit) {
     val context = LocalContext.current
     var listenerGranted by remember { mutableStateOf(false) }
     var postGranted by remember { mutableStateOf(false) }
@@ -240,6 +244,7 @@ fun SettingsRoute() {
                 .filter { CurrentUserScope.accepts(it) && it.contentIntent != null }
                 .sortedByDescending { it.notificationPostTime }.map { it to it.snapshotToken }
         },
+        onOpenAbout = onOpenAbout,
     )
 
     if (confirmDirectChat) DirectChatRiskDialog(
@@ -281,6 +286,7 @@ private fun SettingsScreen(
     actions: SettingsActions,
     onShowIconDialog: () -> Unit,
     onShowLearningChoices: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("微信通知进化") }) },
@@ -306,6 +312,7 @@ private fun SettingsScreen(
             item { DirectChatSection(state, actions) }
             item { AppearanceSection(state, actions, onShowIconDialog) }
             item { DiagnosticsSection(state, actions, onShowLearningChoices) }
+            item { AboutSection(onOpenAbout) }
         }
     }
 }
@@ -345,6 +352,12 @@ private fun CoreSection(state: SettingsUiState, actions: SettingsActions) {
         SwitchItem("直接回复", "依赖微信在原通知中提供回复入口", state.replyEnabled, actions.setReplyEnabled)
         HorizontalDivider()
         SwitchItem("群聊进化", "关闭后群聊通知保持原样", state.groupEnabled, actions.setGroupEnabled)
+        Text(
+            "Android Auto 可展示进化后的会话；回复与标为已读取决于微信原通知是否提供标准入口，没有入口时只展示消息。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
     }
 }
 
@@ -473,6 +486,20 @@ private fun DiagnosticsSection(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+}
+
+@Composable
+private fun AboutSection(onOpenAbout: () -> Unit) {
+    SectionCard(stringResource(R.string.settings_other_title)) {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.about_title)) },
+            supportingContent = { Text(stringResource(R.string.settings_about_summary)) },
+            modifier = Modifier
+                .clickable(onClick = onOpenAbout)
+                .semantics { role = Role.Button },
+            colors = transparentListItemColors(),
+        )
     }
 }
 
@@ -676,6 +703,6 @@ private val previewState = SettingsUiState(
 @Composable
 private fun SettingsScreenPreview() {
     WeChatNotifyEvoTheme(dynamicColor = false) {
-        SettingsScreen(previewState, SettingsActions(), {}, {})
+        SettingsScreen(previewState, SettingsActions(), {}, {}, {})
     }
 }
