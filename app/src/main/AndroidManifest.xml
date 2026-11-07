@@ -91,6 +91,11 @@
             android:name=".EvolutionActionReceiver"
             android:exported="false" />
 
+        <!-- WNE-only simulated Android Auto actions; explicit PendingIntents only. -->
+        <receiver
+            android:name=".AndroidAutoCompatActionReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>

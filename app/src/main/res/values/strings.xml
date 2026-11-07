@@ -17,7 +17,9 @@
     <string name="about_title">关于</string>
     <string name="about_back">返回</string>
     <string name="about_version">版本 %1$s</string>
-    <string name="about_description">将微信通知转换为现代 Messaging 样式，提供会话聚合与 Android Auto 会话展示；回复/已读取决于微信原通知是否提供入口。</string>
+    <string name="about_description">将微信通知转换为现代 Messaging 样式，提供会话聚合与 Android Auto 会话展示。可选兼容动作仅满足车机展示：模拟回复不会发送到微信，模拟已读只清理 WNE 本地状态，也不能绕过 Android Auto 对侧载应用的未知来源/Play 所有权信任过滤。</string>
+    <string name="action_reply_simulated">回复（仅本地模拟）</string>
+    <string name="action_mark_read_simulated">已读（仅清除 WNE）</string>
     <string name="about_project_title">项目地址</string>
     <string name="about_project_url">https://github.com/huimao28/wechat-notify-evo</string>
     <string name="about_project_summary">在浏览器中查看项目仓库</string>
