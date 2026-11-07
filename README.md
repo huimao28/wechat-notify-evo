@@ -60,7 +60,7 @@
 - 系统还必须允许本应用显示气泡；最终是否显示、是否在气泡窗口内承载微信界面，
   由 Android、系统桌面和微信版本共同决定。
 
-## 已知限制（v1.0.19）
+## 已知限制（v1.0.20-beta.1）
 
 - beta.2 已回退 beta.1 的严格过滤：用户空间隔离只拒绝通知来源中明确的非当前 Android 用户；系统/未知负值会按当前用户放行，
   `PendingIntent` 创建用户仅用于诊断、不参与拒绝。它只隔离标准独立 Android 用户或工作资料；
@@ -92,6 +92,7 @@
   本应用为独立重写。
 - 感谢 ichenhe 的 [QQ-Notify-Evolution（企鹅通知进化）](https://github.com/ichenhe/QQ-Notify-Evolution)
   带来的开源参考。
+- 感谢 [Fahrmony](https://github.com/nexen33/Fahrmony) 的开源参考；其 CC BY-NC 4.0 项目仅用于兼容行为研究，WNE 未复制其代码并独立基于 Android 公开 API 实现。本致谢不表示 Fahrmony 作者对 WNE 背书。
 - 感谢参与测试、反馈、逆向排查与兼容验证的社区用户和贡献者。
 
 以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。

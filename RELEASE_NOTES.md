@@ -1,20 +1,22 @@
-微信通知进化 **v1.0.19** 正式版（正式签名 APK）。
+微信通知进化 **v1.0.20-beta.1** 预发行版（正式签名 APK）。
 
 ## 新增与变更
 
-- **Android Auto 会话展示**：进化通知现在声明 Android Auto 通知能力，并完整提供 `MessagingStyle`、消息 `Person`、`CATEGORY_MESSAGE`、时间、有效的微信原 `contentIntent`、群聊标题/标记及长效会话 shortcut。
-- **安全动作桥接**：优先读取微信原通知公开的标准 `Notification.Action` + `RemoteInput`，其次读取平台 `CarExtender` unread conversation；回复的 `resultKey` 和微信原 `PendingIntent` 原样复用。回复/已读取决于微信原通知是否提供入口；没有入口时 Android Auto 只展示会话，不显示动作，也不调用微信未导出 Receiver。
-- 继续读取微信原通知公开的 `CarExtender` 兼容数据；平台 API 不提供 unread conversation 构建器，因此不写私有 Bundle 键，也不为此引入 AndroidX Core 大改，现代 Android Auto 由 `MessagingStyle` 与标准动作消费。
-- 合并“关于/致谢”页面，展示版本、项目地址、许可现状与准确致谢。当前仓库没有 LICENSE 文件，页面如实说明未提供项目许可文本。
-- 保留 v1.0.19 beta 系列的圆形头像兼容、标准 Android 用户空间隔离、可选后台保活与气泡内直达聊天。
+- **Android Auto 兼容动作（模拟）**：新增一个**默认关闭**的实验开关。仅在微信原通知缺少对应入口时，为 Android Auto 补充 WNE 自身的回复/已读动作；微信公开提供的标准 `Notification.Action` / `RemoteInput` / `CarExtender` **真实入口始终优先**且行为不变。
+- **模拟回复不发送微信**：只在 WNE 当前进程的通知历史中显示带有“仅车机本地回显，未发送微信”标识的回复；不调用微信 Receiver 或 `PendingIntent`，正文不写日志、不持久化、不上传，进程结束即消失。
+- **模拟已读不改变微信状态**：只清除 WNE 本地进化通知、内存会话与 shortcut，不会改变微信未读状态或服务器状态。
+- 完整保留 v1.0.19 的 Android Auto 会话展示、关于/致谢页面，以及既有可选后台保活、圆形头像兼容、Android 用户空间隔离和气泡内直达聊天能力。
 
-## 行为与安全边界
+## 边界与兼容性
 
-- Android Auto 通知点击只使用微信原通知的 `contentIntent`；缺少该入口时不替换原通知。
-- 车载适配不会额外触发自动气泡学习或主动打开微信。现有“气泡内直达聊天”开关与通知到达触发逻辑保持不变；开启时首次新会话仍可能按既有限频策略短暂打开微信，关闭时不会学习。
-- 不新增车载开关，不引入 AndroidX Core 或 Car App Library；实现只使用公开平台通知 API。
-- 回复/已读入口、Android Auto 最终展示及语音回复能力仍取决于微信版本、Android Auto 与车机实现。
+- 关闭兼容动作时不补任何模拟动作；既有真实回复、真实已读和通知点击入口不受影响。
+- Android Auto 开发者设置中的“未知来源”开关，以及 Google Play 安装/所有权与 Android Auto 对侧载应用的信任过滤，仍是**彼此独立**的限制；此功能不能绕过它们。
+- Android Auto 最终是否显示消息、回复或已读动作，仍取决于微信版本、Android Auto、车机实现与连接方式。
+
+## 开源参考致谢
+
+感谢 [Fahrmony](https://github.com/nexen33/Fahrmony) 提供开源参考。WNE 仅依据其 CC BY-NC 4.0 项目进行兼容行为研究，没有复制 Fahrmony 代码；本功能独立基于 Android 公开通知 API 实现。此致谢不表示 Fahrmony 作者或贡献者对 WNE 背书。
 
 ## 安装与测试
 
-下载 `app-release.apk`，授予通知使用权（Android 13+ 还需通知权限）。建议分别测试 Android Auto 有线和无线连接：有合法回复入口时验证语音回复与已读；无入口时预期只展示会话。若设备上安装的是早期 debug 签名版，签名不同将无法覆盖安装。
+下载 `app-release.apk`，授予通知使用权（Android 13+ 还需通知权限）。建议先在 Android Auto Desktop Head Unit（DHU）验证默认关闭状态，再分别测试真实入口优先、缺失入口时的模拟回复本地回显和模拟已读本地清理；同时覆盖有线/无线连接及“未知来源”/Play ownership 不同条件。若设备安装的是早期 debug 签名版，签名不同将无法覆盖安装。

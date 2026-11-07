@@ -37,7 +37,8 @@ jobs:
         with:
           name: 微信通知进化 ${{ github.ref_name }}
           body_path: RELEASE_NOTES.md
-          prerelease: false
-          make_latest: true
+          # v1.0.20-beta.1 is intentionally a pre-release and must not replace v1.0.19 as latest.
+          prerelease: true
+          make_latest: false
           files: app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true
