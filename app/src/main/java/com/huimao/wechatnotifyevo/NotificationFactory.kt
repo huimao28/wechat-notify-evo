@@ -101,6 +101,16 @@ object NotificationFactory {
         return builder.build()
     }
 
+    /** Summary-only fallback; conversation notifications always use WeChat's exact contentIntent. */
+    private fun wechatLaunchIntent(context: Context): PendingIntent? {
+        val launch = context.packageManager
+            .getLaunchIntentForPackage(WeChatListenerService.WECHAT_PACKAGE) ?: return null
+        return PendingIntent.getActivity(
+            context, 0, launch,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
     private fun deletePendingIntent(context: Context, conv: Conversation): PendingIntent =
         PendingIntent.getBroadcast(
             context,
@@ -185,7 +195,8 @@ object NotificationFactory {
         val replyInputs = conv.replyRemoteInputs
         if (Prefs.isReplyEnabled(context) && replyIntent != null && replyInputs.isNotEmpty()) {
             val actionBuilder = Notification.Action.Builder(
-                conv.replySourceAction?.icon,
+                conv.replySourceAction?.icon
+                    ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
                 context.getString(R.string.action_reply),
                 replyIntent,
             )
@@ -202,7 +213,8 @@ object NotificationFactory {
         val readIntent = conv.readPendingIntent
         if (readIntent != null) {
             val actionBuilder = Notification.Action.Builder(
-                conv.readSourceAction?.icon,
+                conv.readSourceAction?.icon
+                    ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
                 context.getString(R.string.action_mark_read),
                 readIntent,
             )
@@ -212,21 +224,9 @@ object NotificationFactory {
             builder.addAction(actionBuilder.build())
         }
 
-        // Legacy/platform Android Auto compatibility. Reuse only the exact
-        // notification-supplied PendingIntents and RemoteInput; never invent a
-        // WeChat receiver or a reply result key.
-        if ((replyIntent != null && replyInputs.isNotEmpty()) || readIntent != null) {
-            val unreadBuilder = Notification.CarExtender.UnreadConversation.Builder(conv.title)
-                .setLatestTimestamp(conv.messages.lastOrNull()?.timestamp ?: System.currentTimeMillis())
-            conv.messages.takeLast(20).forEach { unreadBuilder.addMessage(it.text) }
-            if (Prefs.isReplyEnabled(context) && replyIntent != null && replyInputs.isNotEmpty()) {
-                unreadBuilder.setReplyAction(replyIntent, replyInputs.first())
-            }
-            if (readIntent != null) unreadBuilder.setReadPendingIntent(readIntent)
-            builder.extend(
-                Notification.CarExtender().setUnreadConversation(unreadBuilder.build())
-            )
-        }
+        // Platform CarExtender exposes unread-conversation reading but no
+        // public builder. Avoid AndroidX churn and undocumented Bundle keys:
+        // modern Android Auto consumes MessagingStyle plus these actions.
         return builder.build()
     }
 
