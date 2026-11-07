@@ -37,7 +37,7 @@ jobs:
         with:
           name: 微信通知进化 ${{ github.ref_name }}
           body_path: RELEASE_NOTES.md
-          prerelease: true
-          make_latest: false
+          prerelease: false
+          make_latest: true
           files: app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true

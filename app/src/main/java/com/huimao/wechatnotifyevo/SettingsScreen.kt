@@ -352,6 +352,12 @@ private fun CoreSection(state: SettingsUiState, actions: SettingsActions) {
         SwitchItem("直接回复", "依赖微信在原通知中提供回复入口", state.replyEnabled, actions.setReplyEnabled)
         HorizontalDivider()
         SwitchItem("群聊进化", "关闭后群聊通知保持原样", state.groupEnabled, actions.setGroupEnabled)
+        Text(
+            "Android Auto 可展示进化后的会话；回复与标为已读取决于微信原通知是否提供标准入口，没有入口时只展示消息。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
     }
 }
 

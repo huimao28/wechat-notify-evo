@@ -1,6 +1,8 @@
 package com.huimao.wechatnotifyevo
 
+import android.app.Notification
 import android.app.PendingIntent
+import android.app.RemoteInput
 import android.content.Context
 import android.graphics.drawable.Icon
 
@@ -100,9 +102,12 @@ class Conversation(val nid: Int, val sourceUserId: Int) {
      * is retried on the next message.
      */
     var shortcutPushed: Boolean = false
+    /** Opaque WeChat-owned actions. Their PendingIntents are reused verbatim. */
     var replyPendingIntent: PendingIntent? = null
+    var replyRemoteInputs: List<RemoteInput> = emptyList()
+    var replySourceAction: Notification.Action? = null
     var readPendingIntent: PendingIntent? = null
-    var remoteInputResultKey: String? = null
+    var readSourceAction: Notification.Action? = null
     var lastCounter: Int = -1
     val messages: MutableList<ChatMessage> = mutableListOf()
 }

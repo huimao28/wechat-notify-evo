@@ -80,7 +80,9 @@ object ConversationShortcuts {
 
     fun publish(context: Context, conv: Conversation) {
         if (!CurrentUserScope.accepts(conv)) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !Prefs.isDirectChatEnabled(context)) return
+        // Conversation status/Android Auto requires a valid long-lived shortcut
+        // independently of the optional bubble/direct-chat feature.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         try {
             val sm = context.getSystemService(ShortcutManager::class.java) ?: return
             // Skip redundant pushes: ShortcutManager rate-limits apps that

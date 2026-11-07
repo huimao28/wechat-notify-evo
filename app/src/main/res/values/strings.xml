@@ -17,7 +17,7 @@
     <string name="about_title">关于</string>
     <string name="about_back">返回</string>
     <string name="about_version">版本 %1$s</string>
-    <string name="about_description">将微信通知转换为现代 Messaging 样式，提供会话聚合、直接回复等增强体验。</string>
+    <string name="about_description">将微信通知转换为现代 Messaging 样式，提供会话聚合与 Android Auto 会话展示；回复/已读取决于微信原通知是否提供入口。</string>
     <string name="about_project_title">项目地址</string>
     <string name="about_project_url">https://github.com/huimao28/wechat-notify-evo</string>
     <string name="about_project_summary">在浏览器中查看项目仓库</string>

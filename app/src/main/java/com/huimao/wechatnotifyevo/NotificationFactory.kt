@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Person
-import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
 import android.content.LocusId
@@ -102,15 +101,6 @@ object NotificationFactory {
         return builder.build()
     }
 
-    private fun wechatLaunchIntent(context: Context): PendingIntent? {
-        val launch = context.packageManager
-            .getLaunchIntentForPackage(WeChatListenerService.WECHAT_PACKAGE) ?: return null
-        return PendingIntent.getActivity(
-            context, 0, launch,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
     private fun deletePendingIntent(context: Context, conv: Conversation): PendingIntent =
         PendingIntent.getBroadcast(
             context,
@@ -130,7 +120,15 @@ object NotificationFactory {
     ): Notification {
         require(CurrentUserScope.accepts(conv)) { "conversation is outside current user" }
         val avatar = conv.displayLargeIcon(Prefs.isCircularAvatarEnabled(context))
-        val style = Notification.MessagingStyle(context.getString(R.string.self_display_name))
+        val selfName = context.getString(R.string.self_display_name)
+        val style = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Notification.MessagingStyle(
+                Person.Builder().setName(selfName).setKey("wne_self").build()
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.MessagingStyle(selfName)
+        }
         for (msg in conv.messages.takeLast(20)) {
             if (msg.sender != null &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
@@ -141,10 +139,9 @@ object NotificationFactory {
                 style.addMessage(msg.text, msg.timestamp, msg.sender)
             }
         }
-        if (conv.type == ConversationType.GROUP) {
-            style.conversationTitle = conv.title
-            style.isGroupConversation = true
-        }
+        val metadata = ConversationMetadataPolicy.forConversation(conv.title, conv.type)
+        style.conversationTitle = metadata.conversationTitle
+        style.isGroupConversation = metadata.isGroupConversation
         val builder = Notification.Builder(context, channelFor(conv.type))
             .setSmallIcon(smallIcon(context, conv))
             .setColor(WECHAT_GREEN)
@@ -153,7 +150,7 @@ object NotificationFactory {
             .setContentText(conv.messages.lastOrNull()?.text ?: "")
             .setShowWhen(true)
             .setWhen(conv.messages.lastOrNull()?.timestamp ?: System.currentTimeMillis())
-            .setContentIntent(conv.contentIntent ?: wechatLaunchIntent(context))
+            .setContentIntent(requireNotNull(conv.contentIntent) { "original WeChat contentIntent is required" })
             .setDeleteIntent(deletePendingIntent(context, conv))
             .setAutoCancel(true)
             .setGroup(groupKeyFor(conv.type))
@@ -184,53 +181,50 @@ object NotificationFactory {
         val unread = if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size
         if (unread > 0) builder.setNumber(unread)
 
-        if (Prefs.isReplyEnabled(context) &&
-            conv.replyPendingIntent != null && conv.remoteInputResultKey != null
-        ) {
-            val replyPendingIntent = PendingIntent.getBroadcast(
-                context,
-                conv.nid,
-                Intent(context, EvolutionActionReceiver::class.java).apply {
-                    action = EvolutionActionReceiver.ACTION_REPLY
-                    putExtra(EvolutionActionReceiver.EXTRA_NID, conv.nid)
-                    putExtra(EvolutionActionReceiver.EXTRA_SOURCE_USER_ID, conv.sourceUserId)
-                    putExtra(EvolutionActionReceiver.EXTRA_REPLY_PI, conv.replyPendingIntent)
-                    putExtra(EvolutionActionReceiver.EXTRA_RESULT_KEY, conv.remoteInputResultKey)
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val remoteInput = RemoteInput.Builder(conv.remoteInputResultKey!!)
-                .setAllowFreeFormInput(true)
-                .build()
+        val replyIntent = conv.replyPendingIntent
+        val replyInputs = conv.replyRemoteInputs
+        if (Prefs.isReplyEnabled(context) && replyIntent != null && replyInputs.isNotEmpty()) {
             val actionBuilder = Notification.Action.Builder(
-                null,
+                conv.replySourceAction?.icon,
                 context.getString(R.string.action_reply),
-                replyPendingIntent
-            ).addRemoteInput(remoteInput)
+                replyIntent,
+            )
+            replyInputs.forEach(actionBuilder::addRemoteInput)
+            actionBuilder.setAllowGeneratedReplies(
+                conv.replySourceAction?.allowGeneratedReplies ?: true
+            )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY)
             }
             builder.addAction(actionBuilder.build())
         }
 
-        if (conv.readPendingIntent != null) {
-            val markReadPendingIntent = PendingIntent.getBroadcast(
-                context,
-                conv.nid,
-                Intent(context, EvolutionActionReceiver::class.java).apply {
-                    action = EvolutionActionReceiver.ACTION_MARK_READ
-                    putExtra(EvolutionActionReceiver.EXTRA_NID, conv.nid)
-                    putExtra(EvolutionActionReceiver.EXTRA_SOURCE_USER_ID, conv.sourceUserId)
-                    putExtra(EvolutionActionReceiver.EXTRA_READ_PI, conv.readPendingIntent)
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val readIntent = conv.readPendingIntent
+        if (readIntent != null) {
+            val actionBuilder = Notification.Action.Builder(
+                conv.readSourceAction?.icon,
+                context.getString(R.string.action_mark_read),
+                readIntent,
             )
-            builder.addAction(
-                Notification.Action.Builder(
-                    null,
-                    context.getString(R.string.action_mark_read),
-                    markReadPendingIntent
-                ).build()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_MARK_AS_READ)
+            }
+            builder.addAction(actionBuilder.build())
+        }
+
+        // Legacy/platform Android Auto compatibility. Reuse only the exact
+        // notification-supplied PendingIntents and RemoteInput; never invent a
+        // WeChat receiver or a reply result key.
+        if ((replyIntent != null && replyInputs.isNotEmpty()) || readIntent != null) {
+            val unreadBuilder = Notification.CarExtender.UnreadConversation.Builder(conv.title)
+                .setLatestTimestamp(conv.messages.lastOrNull()?.timestamp ?: System.currentTimeMillis())
+            conv.messages.takeLast(20).forEach { unreadBuilder.addMessage(it.text) }
+            if (Prefs.isReplyEnabled(context) && replyIntent != null && replyInputs.isNotEmpty()) {
+                unreadBuilder.setReplyAction(replyIntent, replyInputs.first())
+            }
+            if (readIntent != null) unreadBuilder.setReadPendingIntent(readIntent)
+            builder.extend(
+                Notification.CarExtender().setUnreadConversation(unreadBuilder.build())
             )
         }
         return builder.build()
