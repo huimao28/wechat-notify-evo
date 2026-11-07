@@ -195,7 +195,7 @@ object NotificationFactory {
         val replyInputs = conv.replyRemoteInputs
         if (Prefs.isReplyEnabled(context) && replyIntent != null && replyInputs.isNotEmpty()) {
             val actionBuilder = Notification.Action.Builder(
-                conv.replySourceAction?.icon
+                conv.replySourceAction?.getIcon()
                     ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
                 context.getString(R.string.action_reply),
                 replyIntent,
@@ -213,7 +213,7 @@ object NotificationFactory {
         val readIntent = conv.readPendingIntent
         if (readIntent != null) {
             val actionBuilder = Notification.Action.Builder(
-                conv.readSourceAction?.icon
+                conv.readSourceAction?.getIcon()
                     ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
                 context.getString(R.string.action_mark_read),
                 readIntent,
