@@ -11,6 +11,7 @@ object Prefs {
     private const val KEY_GROUP = "group_enabled"
     private const val KEY_ICON = "icon_choice"
     private const val KEY_CIRCULAR_AVATAR = "circular_avatar_compat"
+    private const val KEY_ANDROID_AUTO_COMPAT_ACTIONS = "android_auto_compat_actions"
 
     // Keep these legacy keys for upgrades and for the already-verified runtime path.
     private const val KEY_BUBBLE = "bubble_enabled"
@@ -36,6 +37,13 @@ object Prefs {
     fun isReplyEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_REPLY, true)
     fun setReplyEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_REPLY, value).apply()
+    }
+
+    fun isAndroidAutoCompatActionsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANDROID_AUTO_COMPAT_ACTIONS, false)
+
+    fun setAndroidAutoCompatActionsEnabled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANDROID_AUTO_COMPAT_ACTIONS, value).apply()
     }
 
     fun isGroupEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_GROUP, true)

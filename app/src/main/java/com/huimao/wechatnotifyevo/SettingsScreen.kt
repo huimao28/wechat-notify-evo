@@ -70,6 +70,7 @@ private data class SettingsUiState(
     val showPostPermission: Boolean,
     val enabled: Boolean,
     val replyEnabled: Boolean,
+    val androidAutoCompatActionsEnabled: Boolean,
     val groupEnabled: Boolean,
     val keepAliveEnabled: Boolean,
     val directChatEnabled: Boolean,
@@ -85,6 +86,7 @@ private data class SettingsActions(
     val requestPostPermission: () -> Unit = {},
     val setEnabled: (Boolean) -> Unit = {},
     val setReplyEnabled: (Boolean) -> Unit = {},
+    val setAndroidAutoCompatActionsEnabled: (Boolean) -> Unit = {},
     val setGroupEnabled: (Boolean) -> Unit = {},
     val setKeepAliveEnabled: (Boolean) -> Unit = {},
     val openBatteryOptimization: () -> Unit = {},
@@ -106,6 +108,9 @@ fun SettingsRoute(onOpenAbout: () -> Unit) {
     var postGranted by remember { mutableStateOf(false) }
     var enabled by remember { mutableStateOf(Prefs.isEnabled(context)) }
     var replyEnabled by remember { mutableStateOf(Prefs.isReplyEnabled(context)) }
+    var androidAutoCompatActionsEnabled by remember {
+        mutableStateOf(Prefs.isAndroidAutoCompatActionsEnabled(context))
+    }
     var groupEnabled by remember { mutableStateOf(Prefs.isGroupEnabled(context)) }
     var keepAliveEnabled by remember { mutableStateOf(Prefs.isKeepAliveEnabled(context)) }
     var iconChoice by remember { mutableStateOf(Prefs.iconChoice(context)) }
@@ -156,6 +161,7 @@ fun SettingsRoute(onOpenAbout: () -> Unit) {
         showPostPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
         enabled = enabled,
         replyEnabled = replyEnabled,
+        androidAutoCompatActionsEnabled = androidAutoCompatActionsEnabled,
         groupEnabled = groupEnabled,
         keepAliveEnabled = keepAliveEnabled,
         directChatEnabled = directChatEnabled,
@@ -173,7 +179,12 @@ fun SettingsRoute(onOpenAbout: () -> Unit) {
             Prefs.setEnabled(context, it)
             if (!it) WeChatListenerService.cancelAll(context)
         },
-        setReplyEnabled = { replyEnabled = it; Prefs.setReplyEnabled(context, it) },
+        setReplyEnabled = { replyEnabled = it; Prefs.setReplyEnabled(context, it); repostConversations() },
+        setAndroidAutoCompatActionsEnabled = {
+            androidAutoCompatActionsEnabled = it
+            Prefs.setAndroidAutoCompatActionsEnabled(context, it)
+            repostConversations()
+        },
         setGroupEnabled = { groupEnabled = it; Prefs.setGroupEnabled(context, it) },
         setKeepAliveEnabled = { requested ->
             var started = true
@@ -349,11 +360,18 @@ private fun CoreSection(state: SettingsUiState, actions: SettingsActions) {
     SectionCard("核心功能") {
         SwitchItem("总开关", "关闭后不再进化新通知，并清除已有进化版通知", state.enabled, actions.setEnabled)
         HorizontalDivider()
-        SwitchItem("直接回复", "依赖微信在原通知中提供回复入口", state.replyEnabled, actions.setReplyEnabled)
+        SwitchItem("直接回复", "依赖微信在原通知中提供回复入口；兼容模拟回复也受此开关控制", state.replyEnabled, actions.setReplyEnabled)
+        HorizontalDivider()
+        SwitchItem(
+            "Android Auto 兼容动作（模拟）",
+            "默认关闭，仅补齐车机展示要求。模拟已读只清除 WNE 本地进化通知、会话和 shortcut；模拟回复仅在本地通知显示“未发送微信”，不会发送到微信。",
+            state.androidAutoCompatActionsEnabled,
+            actions.setAndroidAutoCompatActionsEnabled,
+        )
         HorizontalDivider()
         SwitchItem("群聊进化", "关闭后群聊通知保持原样", state.groupEnabled, actions.setGroupEnabled)
         Text(
-            "Android Auto 可展示进化后的会话；回复与标为已读取决于微信原通知是否提供标准入口，没有入口时只展示消息。",
+            "真实回复/已读入口始终优先且行为不变；兼容动作只补缺失项。它不能绕过 Android Auto 对侧载应用的“未知来源”或 Play 所有权信任过滤。",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -688,6 +706,7 @@ private val previewState = SettingsUiState(
     showPostPermission = true,
     enabled = true,
     replyEnabled = true,
+    androidAutoCompatActionsEnabled = false,
     groupEnabled = true,
     keepAliveEnabled = false,
     directChatEnabled = false,

@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.LocusId
 import android.graphics.drawable.Icon
+import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 
 /** Builds the evolved notifications and owns the app's notification channels. */
 object NotificationFactory {
@@ -111,6 +113,34 @@ object NotificationFactory {
         )
     }
 
+    private fun compatPendingIntent(
+        context: Context,
+        conv: Conversation,
+        action: String,
+        mutable: Boolean,
+    ): PendingIntent {
+        val intent = Intent(context, AndroidAutoCompatActionReceiver::class.java).apply {
+            this.action = action
+            // Identity is part of PendingIntent matching; old conversation generations cannot alias.
+            data = Uri.Builder().scheme("wne-aa-compat")
+                .authority(context.packageName)
+                .appendPath(conv.sourceUserId.toString())
+                .appendPath(conv.nid.toString())
+                .appendPath(conv.routeToken)
+                .appendPath(action.substringAfterLast('.'))
+                .build()
+            putExtra(AndroidAutoCompatActionReceiver.EXTRA_NID, conv.nid)
+            putExtra(AndroidAutoCompatActionReceiver.EXTRA_SOURCE_USER_ID, conv.sourceUserId)
+            putExtra(AndroidAutoCompatActionReceiver.EXTRA_ROUTE_TOKEN, conv.routeToken)
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (mutable) {
+            PendingIntent.FLAG_MUTABLE
+        } else {
+            PendingIntent.FLAG_IMMUTABLE
+        }
+        return PendingIntent.getBroadcast(context, 0, intent, flags)
+    }
+
     private fun deletePendingIntent(context: Context, conv: Conversation): PendingIntent =
         PendingIntent.getBroadcast(
             context,
@@ -191,37 +221,92 @@ object NotificationFactory {
         val unread = if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size
         if (unread > 0) builder.setNumber(unread)
 
+        val replyEnabled = Prefs.isReplyEnabled(context)
         val replyIntent = conv.replyPendingIntent
         val replyInputs = conv.replyRemoteInputs
-        if (Prefs.isReplyEnabled(context) && replyIntent != null && replyInputs.isNotEmpty()) {
-            val actionBuilder = Notification.Action.Builder(
-                conv.replySourceAction?.getIcon()
-                    ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
-                context.getString(R.string.action_reply),
-                replyIntent,
-            )
-            replyInputs.forEach(actionBuilder::addRemoteInput)
-            actionBuilder.setAllowGeneratedReplies(
-                conv.replySourceAction?.allowGeneratedReplies ?: true
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY)
+        val plan = AndroidAutoCompatPolicy.plan(
+            enabled = Prefs.isAndroidAutoCompatActionsEnabled(context),
+            hasRealReply = replyEnabled && replyIntent != null && replyInputs.isNotEmpty(),
+            hasRealMarkRead = conv.readPendingIntent != null,
+        )
+        when (plan.reply) {
+            CompatActionKind.REAL -> {
+                val actionBuilder = Notification.Action.Builder(
+                    conv.replySourceAction?.getIcon()
+                        ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
+                    context.getString(R.string.action_reply),
+                    requireNotNull(replyIntent),
+                )
+                replyInputs.forEach(actionBuilder::addRemoteInput)
+                actionBuilder.setAllowGeneratedReplies(
+                    conv.replySourceAction?.allowGeneratedReplies ?: true
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY)
+                }
+                builder.addAction(actionBuilder.build())
             }
-            builder.addAction(actionBuilder.build())
+            CompatActionKind.SIMULATED -> if (replyEnabled) {
+                val remoteInput = android.app.RemoteInput.Builder(
+                    AndroidAutoCompatPolicy.REMOTE_INPUT_RESULT_KEY
+                ).setLabel(context.getString(R.string.action_reply_simulated)).build()
+                val actionBuilder = Notification.Action.Builder(
+                    Icon.createWithResource(context, R.drawable.ic_stat_message),
+                    context.getString(R.string.action_reply_simulated),
+                    compatPendingIntent(
+                        context, conv,
+                        AndroidAutoCompatActionReceiver.ACTION_SIMULATED_REPLY,
+                        mutable = true,
+                    ),
+                ).addRemoteInput(remoteInput).setAllowGeneratedReplies(true)
+                    .addExtras(Bundle().apply {
+                        putBoolean(
+                            AndroidAutoCompatPolicy.EXTRA_SHOWS_USER_INTERFACE,
+                            AndroidAutoCompatPolicy.REPLY_SHOWS_USER_INTERFACE,
+                        )
+                    })
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY)
+                }
+                builder.addAction(actionBuilder.build())
+            }
+            CompatActionKind.NONE -> Unit
         }
 
-        val readIntent = conv.readPendingIntent
-        if (readIntent != null) {
-            val actionBuilder = Notification.Action.Builder(
-                conv.readSourceAction?.getIcon()
-                    ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
-                context.getString(R.string.action_mark_read),
-                readIntent,
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_MARK_AS_READ)
+        when (plan.markRead) {
+            CompatActionKind.REAL -> {
+                val actionBuilder = Notification.Action.Builder(
+                    conv.readSourceAction?.getIcon()
+                        ?: Icon.createWithResource(context, R.drawable.ic_stat_message),
+                    context.getString(R.string.action_mark_read),
+                    requireNotNull(conv.readPendingIntent),
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_MARK_AS_READ)
+                }
+                builder.addAction(actionBuilder.build())
             }
-            builder.addAction(actionBuilder.build())
+            CompatActionKind.SIMULATED -> {
+                val actionBuilder = Notification.Action.Builder(
+                    Icon.createWithResource(context, R.drawable.ic_stat_message),
+                    context.getString(R.string.action_mark_read_simulated),
+                    compatPendingIntent(
+                        context, conv,
+                        AndroidAutoCompatActionReceiver.ACTION_SIMULATED_MARK_READ,
+                        mutable = false,
+                    ),
+                ).addExtras(Bundle().apply {
+                    putBoolean(
+                        AndroidAutoCompatPolicy.EXTRA_SHOWS_USER_INTERFACE,
+                        AndroidAutoCompatPolicy.MARK_READ_SHOWS_USER_INTERFACE,
+                    )
+                })
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    actionBuilder.setSemanticAction(Notification.Action.SEMANTIC_ACTION_MARK_AS_READ)
+                }
+                builder.addAction(actionBuilder.build())
+            }
+            CompatActionKind.NONE -> Unit
         }
 
         // Platform CarExtender exposes unread-conversation reading but no
