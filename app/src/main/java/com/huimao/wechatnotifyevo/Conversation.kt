@@ -67,6 +67,8 @@ class Conversation(val nid: Int, val sourceUserId: Int) {
     var notificationKey: String? = null
     var notificationPostTime: Long = 0L
     var learnedMainUser: String? = null
+    /** True only after a real WeChat post observed while direct chat was enabled. */
+    var directChatEligible: Boolean = false
     var learningStatus: String = "尚未学习当前通知"
 
     fun isCurrentSnapshot(token: String, key: String?, pi: PendingIntent?): Boolean =

@@ -117,7 +117,7 @@ object ManualConversationLearning {
             learned.map { it.learningStatus }.distinct().joinToString("\n")
     }
 
-    fun forget(context: Context) {
+    fun forget(context: Context, repostNotifications: Boolean = true) {
         requests.cancel()
         busy = false
         ConversationStore.allForUser(CurrentUserScope.id())
@@ -127,9 +127,16 @@ object ManualConversationLearning {
             it.routeToken = java.util.UUID.randomUUID().toString()
             it.learnedMainUser = null
             it.shortcutPushed = false
+            it.directChatEligible = false
             it.learningStatus = "已清除学习结果"
-            WeChatListenerService.repostConversation(context, it, silent = true)
+            if (repostNotifications) {
+                WeChatListenerService.repostConversation(context, it, silent = true)
+            }
         }
-        status = "已清除内存学习结果并请求移除本地会话 shortcut；已打开的旧气泡请手动关闭"
+        status = if (repostNotifications) {
+            "已清除内存学习结果并请求移除本地会话 shortcut；已打开的旧气泡请手动关闭"
+        } else {
+            "已关闭直达聊天并清理 shortcut；请等待下一条新消息"
+        }
     }
 }
