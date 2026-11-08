@@ -19,21 +19,26 @@ object DirectChatModePolicy {
 }
 
 /**
- * Orders a mode transition so disabling first invalidates callbacks, then
- * atomically writes all linked flags, and finally removes learned routes.
+ * Orders a mode transition. Enabling is deliberately only one atomic
+ * preference write: refreshing an existing notification can make some OEMs
+ * expand newly-added bubble metadata and launch its shortcut. Disabling first
+ * invalidates callbacks, then removes routes and active evolved notifications
+ * without reposting them.
  */
 class DirectChatTransition(
     private val writeLinkedFlags: (Boolean) -> Unit,
     private val cancelPendingLearning: () -> Unit,
     private val cleanupLearnedRoutes: () -> Unit,
+    private val removeActiveNotifications: () -> Unit,
 ) {
     fun setEnabled(enabled: Boolean) {
         if (enabled) {
             writeLinkedFlags(true)
-        } else {
-            cancelPendingLearning()
-            writeLinkedFlags(false)
-            cleanupLearnedRoutes()
+            return
         }
+        cancelPendingLearning()
+        writeLinkedFlags(false)
+        cleanupLearnedRoutes()
+        removeActiveNotifications()
     }
 }

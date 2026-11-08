@@ -207,6 +207,7 @@ object NotificationFactory {
         // Neither mode guarantees embedding; the system controls bubble display.
         // A stale or missing target must never receive bubble metadata.
         if (Prefs.isBubbleEnabled(context) &&
+            conv.directChatEligible &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             (conv.type == ConversationType.DIRECT || conv.type == ConversationType.GROUP) &&
             ConversationShortcuts.isTargetPublished(context, conv)

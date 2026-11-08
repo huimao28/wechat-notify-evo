@@ -218,10 +218,15 @@ fun SettingsRoute(onOpenAbout: () -> Unit) {
                 DirectChatTransition(
                     writeLinkedFlags = { Prefs.setDirectChatEnabled(context, it) },
                     cancelPendingLearning = ManualConversationLearning::cancelPending,
-                    cleanupLearnedRoutes = { ManualConversationLearning.forget(context) },
+                    cleanupLearnedRoutes = {
+                        ManualConversationLearning.forget(context, repostNotifications = false)
+                    },
+                    // Reposting to remove BubbleMetadata is normally safe, but
+                    // canceling is stricter on OEM bubble implementations: no
+                    // notification update can expand or dispatch its shortcut.
+                    removeActiveNotifications = { WeChatListenerService.cancelAll(context) },
                 ).setEnabled(false)
                 directChatEnabled = false
-                repostConversations()
             }
         },
         setCircularAvatarEnabled = { enabled ->
@@ -264,10 +269,11 @@ fun SettingsRoute(onOpenAbout: () -> Unit) {
                 writeLinkedFlags = { Prefs.setDirectChatEnabled(context, it) },
                 cancelPendingLearning = ManualConversationLearning::cancelPending,
                 cleanupLearnedRoutes = { ManualConversationLearning.forget(context) },
+                removeActiveNotifications = { WeChatListenerService.cancelAll(context) },
             ).setEnabled(true)
             directChatEnabled = true
-            repostConversations()
             confirmDirectChat = false
+            Toast.makeText(context, "已开启，从下一条新消息起生效", Toast.LENGTH_LONG).show()
         },
         onDismiss = { confirmDirectChat = false },
     )
@@ -415,11 +421,11 @@ private fun KeepAliveSection(state: SettingsUiState, actions: SettingsActions) {
 private fun DirectChatSection(state: SettingsUiState, actions: SettingsActions) {
     SectionCard(
         title = "气泡聊天",
-        subtitle = "系统需允许本应用显示气泡；首次遇到新会话时可能短暂打开微信",
+        subtitle = "开启不会立即打开微信，从下一条新消息起生效",
     ) {
         SwitchItem(
             "气泡内直达聊天",
-            "开启后自动学习新会话并通过系统气泡尝试直达；有限频，失败不会循环重试",
+            "仅影响下一条新消息；遇到尚未学习的新会话时，自动学习仍可能短暂打开微信",
             state.directChatEnabled,
             actions.setDirectChatEnabled,
         )
@@ -596,7 +602,7 @@ private fun DirectChatRiskDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("开启气泡内直达聊天？") },
         text = {
-            Text("开启后会同时启用系统气泡、自动学习和微信直达入口。每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发。首次遇到新会话可能短暂打开微信并影响未读状态；5 秒无有效回调即放弃。系统必须允许本应用显示气泡。Main_User 会随 shortcut 保存在系统本机，不记录日志、不上传。关闭会立即失效在途结果并清理相关 shortcut，但不能撤回已经发送的微信入口。")
+            Text("确认开启时只保存开关，不刷新现有通知或 shortcut，也不会立即打开微信；功能从下一条新消息起生效。遇到尚未学习的新会话时，自动学习仍可能短暂打开微信并影响未读状态。每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发，5 秒无有效回调即放弃。系统必须允许本应用显示气泡。Main_User 会随 shortcut 保存在系统本机，不记录日志、不上传。关闭会立即失效在途结果、清理相关 shortcut，并取消当前进化通知以避免厂商系统触发旧气泡；请等待下一条新消息。")
         },
         confirmButton = { TextButton(onClick = onConfirm) { Text("了解风险并开启") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },

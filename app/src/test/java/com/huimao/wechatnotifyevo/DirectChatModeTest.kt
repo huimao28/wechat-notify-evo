@@ -1,7 +1,6 @@
 package com.huimao.wechatnotifyevo
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,21 +22,23 @@ class DirectChatModeTest {
         }
     }
 
-    @Test fun enablingWritesLinkedStateWithoutCleanup() {
+    @Test fun enablingOnlyWritesLinkedStateWithoutRefreshOrCleanup() {
         var flags = DirectChatFlags.linked(false)
-        var cancelled = false
-        var cleaned = false
+        val events = mutableListOf<String>()
         DirectChatTransition(
-            writeLinkedFlags = { flags = DirectChatFlags.linked(it) },
-            cancelPendingLearning = { cancelled = true },
-            cleanupLearnedRoutes = { cleaned = true },
+            writeLinkedFlags = {
+                flags = DirectChatFlags.linked(it)
+                events += "write:$it"
+            },
+            cancelPendingLearning = { events += "cancel" },
+            cleanupLearnedRoutes = { events += "cleanup" },
+            removeActiveNotifications = { events += "remove-notifications" },
         ).setEnabled(true)
         assertTrue(flags.enabled)
-        assertFalse(cancelled)
-        assertFalse(cleaned)
+        assertEquals(listOf("write:true"), events)
     }
 
-    @Test fun disablingInvalidatesBeforeAtomicWriteThenCleansRoutes() {
+    @Test fun disablingInvalidatesWritesCleansThenRemovesWithoutRefresh() {
         var flags = DirectChatFlags.linked(true)
         val events = mutableListOf<String>()
         DirectChatTransition(
@@ -47,8 +48,12 @@ class DirectChatModeTest {
             },
             cancelPendingLearning = { events += "cancel" },
             cleanupLearnedRoutes = { events += "cleanup" },
+            removeActiveNotifications = { events += "remove-notifications" },
         ).setEnabled(false)
         assertEquals(DirectChatFlags.linked(false), flags)
-        assertEquals(listOf("cancel", "write:false", "cleanup"), events)
+        assertEquals(
+            listOf("cancel", "write:false", "cleanup", "remove-notifications"),
+            events,
+        )
     }
 }

@@ -251,6 +251,9 @@ class WeChatListenerService : NotificationListenerService() {
             currentUserId = sourceUserId,
         )
         conv.replaceSnapshot(sbn.key, sbn.postTime, n.contentIntent, identity)
+        // Capture eligibility only on a real source notification. Settings-side
+        // reposts must not retrofit bubbles onto notifications that predate opt-in.
+        conv.directChatEligible = Prefs.isDirectChatEnabled(this)
         conv.title = title
         conv.smallIcon = n.smallIcon
         // Keep the last known avatar: WeChat posts no large icon for a
