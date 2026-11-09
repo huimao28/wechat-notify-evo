@@ -38,7 +38,7 @@ object ConversationShortcuts {
             context.getSystemService(ShortcutManager::class.java)?.getShortcuts(
                 ShortcutManager.FLAG_MATCH_DYNAMIC or ShortcutManager.FLAG_MATCH_CACHED or
                     ShortcutManager.FLAG_MATCH_PINNED
-            )?.any { it.id == shortcutId(conv) && it.isLongLived && sameTarget(it.intent, target) } == true
+            )?.any { it.id == shortcutId(conv) && sameTarget(it.intent, target) } == true
         } catch (_: RuntimeException) { false }
     }
 
@@ -55,7 +55,7 @@ object ConversationShortcuts {
             val launch = targetIntent(context, conv) ?: return false
             val already = sm.getShortcuts(ShortcutManager.FLAG_MATCH_DYNAMIC or
                 ShortcutManager.FLAG_MATCH_CACHED or ShortcutManager.FLAG_MATCH_PINNED)
-                .any { it.id == id && it.isLongLived && sameTarget(it.intent, launch) }
+                .any { it.id == id && sameTarget(it.intent, launch) }
             if (already) {
                 conv.shortcutPushed = true
                 return true
