@@ -11,7 +11,7 @@ import android.util.Log
 /** Single entry point for every optional keep-alive mechanism. */
 object KeepAliveCoordinator {
     private const val TAG = "KeepAliveCoordinator"
-    private const val PERIODIC_JOB_ID = 0x4b4101
+    internal const val PERIODIC_JOB_ID = 0x4b4101
     private const val RECOVERY_JOB_ID = 0x4b4102
     private const val REBIND_COOLDOWN_MILLIS = 2 * 60 * 1000L
     private const val PERIODIC_INTERVAL_MILLIS = 15 * 60 * 1000L

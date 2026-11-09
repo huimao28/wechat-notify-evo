@@ -38,6 +38,7 @@ class WeChatListenerService : NotificationListenerService() {
         if (UserIsolationPolicy.decide(sourceUserId, currentUserId, null) ==
             UserIsolationDecision.IGNORE_SOURCE_USER) {
             Log.i(TAG, "Ignored WeChat notification: sourceUserId=$sourceUserId currentUserId=$currentUserId")
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.FOREIGN_USER)
             return null
         }
         val normalized = UserIsolationPolicy.normalizeSourceUserId(sourceUserId, currentUserId)
@@ -203,27 +204,47 @@ class WeChatListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName != WECHAT_PACKAGE) return
+        InMemoryDiagnostics.record(sbn.userId, DiagnosticStage.RECEIVED)
         // Earliest gate: only a concrete foreign Android user remains untouched.
         val sourceUserId = sourceUserForProcessing(sbn) ?: return
         val n = sbn.notification ?: return
         logCreatorUser(sourceUserId, n)
-        if (!Prefs.isEnabled(this)) return
+        if (!Prefs.isEnabled(this)) {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.DISABLED)
+            return
+        }
         // Android Auto and phone taps must use WeChat's exact public entry.
         // If it is absent, leave the original notification untouched.
-        if (n.contentIntent == null) return
-        if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) return
+        if (n.contentIntent == null) {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.MISSING_CONTENT_INTENT)
+            return
+        }
+        if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.ONGOING)
+            return
+        }
         // WeChat's own group summary: drop it, our own summary replaces it.
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.SUMMARY)
             cancelNotification(sbn.key)
             return
         }
         val extras = n.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
-            ?.takeIf { it.isNotEmpty() } ?: return
+            ?.takeIf { it.isNotEmpty() } ?: run {
+                InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.MISSING_TITLE)
+                return
+            }
         // No ticker means a non-conversation notification (e.g. web login
         // confirmation): leave it untouched.
-        val ticker = n.tickerText?.toString() ?: return
-        val rawText = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: return
+        val ticker = n.tickerText?.toString() ?: run {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.MISSING_TICKER)
+            return
+        }
+        val rawText = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: run {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.MISSING_TEXT)
+            return
+        }
 
         // Decide the conversation type before touching the store, so that a
         // group message we are configured to ignore never pollutes the archive.
@@ -232,6 +253,7 @@ class WeChatListenerService : NotificationListenerService() {
         val isGroupCandidate = senderPrefix != null && senderPrefix != title &&
             !isBotTitle(title)
         if (isGroupCandidate && !Prefs.isGroupEnabled(this)) {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.GROUP_DISABLED)
             return
         }
 
@@ -254,6 +276,7 @@ class WeChatListenerService : NotificationListenerService() {
         // Capture eligibility only on a real source notification. Settings-side
         // reposts must not retrofit bubbles onto notifications that predate opt-in.
         conv.directChatEligible = Prefs.isDirectChatEnabled(this)
+        InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.BUBBLE_ELIGIBILITY)
         conv.title = title
         conv.smallIcon = n.smallIcon
         // Keep the last known avatar: WeChat posts no large icon for a
@@ -326,10 +349,14 @@ class WeChatListenerService : NotificationListenerService() {
         replaceOriginal(sbn)
         val nm = notificationManager(this) ?: return
         ConversationShortcuts.publish(this, conv)
+        if (!conv.shortcutPushed) {
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.SHORTCUT_FAILED)
+        }
         nm.notify(
             conv.nid,
             NotificationFactory.buildConversationNotification(this, conv, silent = false)
         )
+        InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.EVOLVED_POSTED)
         refreshSummaries(this)
         ManualConversationLearning.considerAutomatic(this, conv)
     }

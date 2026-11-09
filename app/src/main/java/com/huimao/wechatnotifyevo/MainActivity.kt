@@ -21,11 +21,15 @@ class MainActivity : ComponentActivity() {
             WeChatNotifyEvoTheme {
                 var destination by rememberSaveable { mutableStateOf("settings") }
                 val navigateBack = { destination = "settings" }
-                BackHandler(enabled = destination == "about", onBack = navigateBack)
+                BackHandler(enabled = destination != "settings", onBack = navigateBack)
 
                 when (destination) {
                     "about" -> AboutScreen(onBack = navigateBack)
-                    else -> SettingsRoute(onOpenAbout = { destination = "about" })
+                    "diagnostics" -> DiagnosticsRoute(onBack = navigateBack)
+                    else -> SettingsRoute(
+                        onOpenAbout = { destination = "about" },
+                        onOpenDiagnostics = { destination = "diagnostics" },
+                    )
                 }
             }
         }

@@ -23,9 +23,16 @@ object ManualConversationLearning {
     }
 
     fun considerAutomatic(context: Context, conv: Conversation) {
-        if (!CurrentUserScope.accepts(conv)) return
+        if (!CurrentUserScope.accepts(conv)) {
+            InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_SKIP)
+            return
+        }
         if (!automatic.admit(conv, Prefs.isAutoLearningEnabled(context), busy,
-                android.os.SystemClock.elapsedRealtime())) return
+                android.os.SystemClock.elapsedRealtime())) {
+            InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_SKIP)
+            return
+        }
+        InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_STARTED)
         learn(context, conv, conv.snapshotToken, auto = true)
     }
 
@@ -93,6 +100,7 @@ object ManualConversationLearning {
                             }
                         }
                     }
+                    if (auto) InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_RESULT)
                 }
             }, handler)
         } catch (_: Exception) {

@@ -10,6 +10,7 @@
     <!-- Public launcher resolution only; no private WeChat components. -->
     <queries>
         <package android:name="com.tencent.mm" />
+        <package android:name="com.google.android.projection.gearhead" />
     </queries>
 
     <application
@@ -18,6 +19,18 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/Theme.WeChatNotifyEvo">
+
+        <!-- Read-only, temporary sharing of one generated report. The path XML
+             exposes cache/diagnostics only; no broad cache or files root. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostics_file_paths" />
+        </provider>
 
         <!-- Official Android Auto notification-messaging capability. -->
         <meta-data

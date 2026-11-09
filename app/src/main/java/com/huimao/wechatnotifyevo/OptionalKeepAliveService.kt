@@ -176,6 +176,8 @@ class OptionalKeepAliveService : Service() {
             }
         }
 
+        fun isRunningOrRequestedForDiagnostics(): Boolean = runningOrRequested
+
         fun ensureChannel(context: Context) {
             try {
                 val manager = context.getSystemService(NotificationManager::class.java) ?: return

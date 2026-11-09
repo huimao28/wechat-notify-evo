@@ -102,7 +102,7 @@ private data class SettingsActions(
 )
 
 @Composable
-fun SettingsRoute(onOpenAbout: () -> Unit) {
+fun SettingsRoute(onOpenAbout: () -> Unit, onOpenDiagnostics: () -> Unit) {
     val context = LocalContext.current
     var listenerGranted by remember { mutableStateOf(false) }
     var postGranted by remember { mutableStateOf(false) }
@@ -261,6 +261,7 @@ fun SettingsRoute(onOpenAbout: () -> Unit) {
                 .sortedByDescending { it.notificationPostTime }.map { it to it.snapshotToken }
         },
         onOpenAbout = onOpenAbout,
+        onOpenDiagnostics = onOpenDiagnostics,
     )
 
     if (confirmDirectChat) DirectChatRiskDialog(
@@ -304,6 +305,7 @@ private fun SettingsScreen(
     onShowIconDialog: () -> Unit,
     onShowLearningChoices: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("微信通知进化") }) },
@@ -328,7 +330,7 @@ private fun SettingsScreen(
             item { KeepAliveSection(state, actions) }
             item { DirectChatSection(state, actions) }
             item { AppearanceSection(state, actions, onShowIconDialog) }
-            item { DiagnosticsSection(state, actions, onShowLearningChoices) }
+            item { DiagnosticsSection(state, actions, onShowLearningChoices, onOpenDiagnostics) }
             item { AboutSection(onOpenAbout) }
         }
     }
@@ -474,6 +476,7 @@ private fun DiagnosticsSection(
     state: SettingsUiState,
     actions: SettingsActions,
     onShowLearningChoices: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
 ) {
     SectionCard(
         "诊断与学习",
@@ -483,6 +486,11 @@ private fun DiagnosticsSection(
             Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            Button(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
+                Text("打开诊断中心")
+            }
+            Text("逐项自检、厂商后台/气泡引导、重新绑定与脱敏报告", style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider()
             FilledTonalButton(
                 onClick = onShowLearningChoices,
                 enabled = !state.learningBusy,
@@ -728,6 +736,6 @@ private val previewState = SettingsUiState(
 @Composable
 private fun SettingsScreenPreview() {
     WeChatNotifyEvoTheme(dynamicColor = false) {
-        SettingsScreen(previewState, SettingsActions(), {}, {}, {})
+        SettingsScreen(previewState, SettingsActions(), {}, {}, {}, {})
     }
 }
