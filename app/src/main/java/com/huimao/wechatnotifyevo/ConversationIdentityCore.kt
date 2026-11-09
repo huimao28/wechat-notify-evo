@@ -27,8 +27,10 @@ object ConversationIdentityCore {
     fun stableId(salt: ByteArray, packageName: String, accountScope: Int, mainUser: String): String =
         PREFIX + hmacHex(salt, "$packageName|user:$accountScope|main:$mainUser").take(40)
 
-    fun fallbackId(salt: ByteArray, packageName: String, accountScope: Int, nid: Int): String =
-        PREFIX + hmacHex(salt, "$packageName|user:$accountScope|nid:$nid").take(40)
+    fun fallbackId(salt: ByteArray, packageName: String, accountScope: Int, nid: Int,
+                   discriminator: String = ""): String =
+        PREFIX + hmacHex(salt,
+            "$packageName|user:$accountScope|nid:$nid|proof:$discriminator").take(40)
 
     fun proof(salt: ByteArray, scope: String, value: String?): String =
         hmacHex(salt, "$scope:${value.orEmpty()}").take(32)

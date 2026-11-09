@@ -43,7 +43,11 @@ class StableConversationIdentityTest {
     }
 
     @Test fun learnedIdentityMigratesOnceThenRemainsStable() {
-        val fallback = ConversationIdentityCore.fallbackId(salt, "pkg", 0, 42)
+        val fallback = ConversationIdentityCore.fallbackId(salt, "pkg", 0, 42, "proof-a")
+        assertNotEquals(fallback,
+            ConversationIdentityCore.fallbackId(salt, "pkg", 0, 42, "proof-b"))
+        assertEquals(fallback,
+            ConversationIdentityCore.fallbackId(salt, "pkg", 0, 42, "proof-a"))
         val learned = ConversationIdentityCore.stableId(salt, "pkg", 0, "wxid")
         assertNotEquals(fallback, learned)
         assertEquals(learned, ConversationIdentityCore.stableId(salt, "pkg", 0, "wxid"))

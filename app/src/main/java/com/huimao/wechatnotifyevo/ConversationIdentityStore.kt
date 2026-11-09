@@ -47,7 +47,9 @@ object ConversationIdentityStore {
             touch(context, sourceUserId, nid, old.copy(lastSeen = System.currentTimeMillis()))
             return Resolution(old.stableId, kind, true)
         }
-        val fallback = ConversationIdentityCore.fallbackId(salt, context.packageName, sourceUserId, nid)
+        val fallback = ConversationIdentityCore.fallbackId(
+            salt, context.packageName, sourceUserId, nid, "$identityProof|$titleProof"
+        )
         save(context, sourceUserId, nid, fallback, identityProof, titleProof)
         return Resolution(fallback, Kind.TEMPORARY, false)
     }
