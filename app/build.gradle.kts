@@ -25,8 +25,8 @@ android {
         applicationId = "com.huimao.wechatnotifyevo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "1.0.20-beta.4"
+        versionCode = 28
+        versionName = "1.0.20-beta.5"
     }
 
     signingConfigs {
