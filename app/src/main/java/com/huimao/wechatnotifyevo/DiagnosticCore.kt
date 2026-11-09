@@ -122,9 +122,9 @@ object DiagnosticReportBuilder {
             appendLine("## 原因计数")
             if (counts.isEmpty()) appendLine("- 无内存事件") else counts.forEach { (k, v) -> appendLine("- $k: $v") }
             appendLine()
-            appendLine("## 最近事件（仅时间、用户ID、枚举）")
+            appendLine("## 最近事件（仅时间、枚举）")
             if (events.isEmpty()) appendLine("- 无；进程重启会清空") else events.forEach {
-                appendLine("- ${it.timestampMillis} | user=${it.sourceUserId} | ${it.stage.wireName}")
+                appendLine("- ${it.timestampMillis} | ${it.stage.wireName}")
             }
         }
     }

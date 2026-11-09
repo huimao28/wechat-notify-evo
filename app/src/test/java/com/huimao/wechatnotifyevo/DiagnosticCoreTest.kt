@@ -48,6 +48,7 @@ class DiagnosticCoreTest {
         sentinels.forEach { assertFalse(report.contains(it)) }
         assertTrue(report.contains("通知使用权: 已配置"))
         assertTrue(report.contains("missingText: 1"))
+        assertFalse(report.contains("user="))
         assertTrue(report.contains(DiagnosticReportBuilder.PRIVACY_NOTICE))
     }
 
