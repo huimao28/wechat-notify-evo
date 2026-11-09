@@ -45,6 +45,7 @@ private fun AppContent() {
     val event = (transition as? NavigationEventTransitionState.InProgress)?.latestEvent
     val progress = event?.progress?.coerceIn(0f, 1f) ?: 0f
     val direction = if (event?.swipeEdge == NavigationEvent.EDGE_RIGHT) -1f else 1f
+    val predictiveShape = MaterialTheme.shapes.extraLarge
 
     NavigationBackHandler(
         state = backState,
@@ -75,7 +76,7 @@ private fun AppContent() {
                         scaleY = 1f - 0.06f * progress
                         alpha = 1f - 0.12f * progress
                         clip = true
-                        shape = MaterialTheme.shapes.extraLarge
+                        shape = predictiveShape
                     },
             ) {
                 when (destination) {
