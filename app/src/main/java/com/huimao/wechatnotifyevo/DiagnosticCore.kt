@@ -105,7 +105,7 @@ data class DiagnosticSnapshot(
 )
 
 object DiagnosticReportBuilder {
-    const val PRIVACY_NOTICE = "本报告不含聊天内容、联系人、会话ID、通知key、Intent extras或凭据。"
+    const val PRIVACY_NOTICE = "本报告不含聊天正文、联系人、Main_User、通知 key、Intent extras 或凭据；最近事件仅保存在进程内存，进程重启即清空。"
     fun build(snapshot: DiagnosticSnapshot, events: List<DiagnosticEvent>): String {
         val counts = events.groupingBy { it.stage.wireName }.eachCount().toSortedMap()
         return buildString {

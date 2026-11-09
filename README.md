@@ -17,6 +17,7 @@
 - **Android Auto 会话展示**：进化通知声明通知型车载能力，并提供标准 `MessagingStyle`、`Person`、会话 shortcut 与消息分类。微信原通知提供的标准 `Notification.Action`/`RemoteInput` 或 `CarExtender` 入口始终优先。
 - **Android Auto 兼容动作（模拟）**：默认关闭；开启后只为缺失项补 WNE 自身动作，以满足车机消息 UI 对 reply/read action 的展示要求。模拟已读只清除 WNE 本地进化通知、内存会话与 shortcut；模拟回复只在当前进程的通知历史中加入 `【仅车机本地回显，未发送微信】我：…`，绝不调用微信内部 Receiver，也不会发送到微信。回复正文不写日志、不持久化、不上传，进程结束即消失。
 - 群聊进化、通知图标选择、监听服务诊断。
+- **隐私安全诊断中心**：汇总应用/系统版本、通知权限、监听状态、保活与气泡配置，提供按厂商区分的后台/气泡操作引导，以及一键重新绑定通知监听和通知使用权、通知、气泡、电池优化、应用详情等系统设置入口。可预览、复制或分享 Markdown 脱敏报告；最近 20 条通知处理事件仅保存在进程内存，重启即清空。
 - **圆形头像兼容**：默认开启，把微信方形头像中心裁剪为透明圆形位图，并统一用于通知头像、
   私聊 Person、会话 shortcut 与气泡图标来源，以改善部分厂商的显示；关闭后使用微信原头像。
   输出最长边限制为 256 px，已较小头像不会放大；无法安全处理时自动回退原图。
@@ -45,6 +46,7 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 ### 隐私边界
 
+- 诊断报告不含聊天正文、联系人、`Main_User`、通知 key、Intent extras 或凭据；最近通知处理事件只记录时间、来源用户编号和处理阶段枚举，仅保存在进程内存，进程重启即清空。
 - App 不显示、记录日志或上传 `Main_User`，会话映射只保存在进程内存。
 - 为让系统直接启动微信，`Main_User` 必须作为 shortcut Intent extra 交给 Android，
   因而会由 Launcher/系统保存在本机，不能视为完全不落盘。
@@ -64,9 +66,9 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 - 系统还必须允许本应用显示气泡；最终是否显示、是否在气泡窗口内承载微信界面，
   由 Android、系统桌面和微信版本共同决定。
 
-## 已知限制（v1.0.20-beta.2）
+## 已知限制（v1.0.20-beta.3）
 
-- beta.2 延续已回退的严格过滤策略：用户空间隔离只拒绝通知来源中明确的非当前 Android 用户；系统/未知负值会按当前用户放行，
+- beta.3 延续已回退的严格过滤策略：用户空间隔离只拒绝通知来源中明确的非当前 Android 用户；系统/未知负值会按当前用户放行，
   `PendingIntent` 创建用户仅用于诊断、不参与拒绝。它只隔离标准独立 Android 用户或工作资料；
   ColorOS 同用户分身无法可靠区分，请在系统中将主微信设为默认打开。
 - 可选 FGS + `JobScheduler` watchdog 只提高可靠性；省电策略、厂商后台限制、强行停止仍可使其失效。
@@ -83,8 +85,7 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 - 本地：Android Studio（minSdk 26、target/compileSdk 35、Java 17、Gradle 8.9）。
 - CI：`.github/workflows/android.yml` 对分支运行 `testDebugUnitTest assembleDebug` 并上传 debug APK。
-- Release：创建并推送 annotated tag `v*` 后，`.github/workflows/release.yml` 使用仓库 Secrets
-  解码正式 keystore、运行 `assembleRelease`，并将 `app-release.apk` 发布到对应 GitHub Release。
+- Release：先确认标签不存在；仅在 main 的 `testDebugUnitTest assembleDebug` 成功后创建并推送 annotated tag `v*`。`.github/workflows/release.yml` 使用仓库 Secrets 解码正式 keystore、运行 `assembleRelease`，并将 `app-release.apk` 发布到对应 GitHub Release；beta 标签固定为 Pre-release、非 Draft 且 `make_latest: false`，不取代最新稳定版。
 - 仓库不带 `gradle-wrapper.jar`，CI 使用 `gradle/actions/setup-gradle` 安装 Gradle 8.9。
 
 ## 致谢与来源
