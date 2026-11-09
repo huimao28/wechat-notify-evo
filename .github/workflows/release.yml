@@ -23,7 +23,7 @@ jobs:
       # No gradle-wrapper.jar in this repo: use the Gradle distribution directly.
       - uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Decode release keystore
         run: printf '%s' "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
       - name: Build release APK
