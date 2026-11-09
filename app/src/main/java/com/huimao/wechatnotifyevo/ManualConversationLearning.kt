@@ -80,19 +80,25 @@ object ManualConversationLearning {
                         if (user == null) {
                             status = "回调未提供非空 String Main_User；未绑定"
                         } else {
+                            val supersededId = conv.conversationStableId
                             conv.learnedMainUser = user
+                            conv.conversationStableId = ConversationIdentityStore.bindMainUser(
+                                activity, conv, user
+                            )
+                            conv.conversationIdentityKind = ConversationIdentityStore.Kind.STABLE
                             conv.shortcutPushed = false
-                            conv.learningStatus = "已学习当前快照；请返回应用刷新 shortcut（尚未验证直达）"
+                            if (supersededId != conv.conversationStableId) {
+                                ConversationShortcuts.retireSupersededShortcut(activity, supersededId)
+                            }
+                            conv.learningStatus = "已学习并绑定稳定会话身份；正在刷新 shortcut"
                             status = conv.learningStatus
                             // Publish once, never send another PI or launch an Activity.
                             if (auto) {
                                 ConversationShortcuts.publish(activity, conv)
                                 if (!ConversationShortcuts.isTargetPublished(activity, conv)) {
-                                    // Keep the already published launcher/trampoline fallback.
-                                    // Do not retry the learned route on every subsequent message.
-                                    conv.learnedMainUser = null
                                     conv.shortcutPushed = false
-                                    conv.learningStatus = "学习结果未发布；已放弃本次结果，保留原入口，不自动重试"
+                                    conv.learningStatus = "稳定身份已保存；shortcut 暂未发布，本次使用普通消息通知"
+                                    WeChatListenerService.repostConversation(activity, conv, silent = true)
                                 } else {
                                     WeChatListenerService.repostConversation(activity, conv, silent = true)
                                 }

@@ -60,8 +60,12 @@ class Conversation(val nid: Int, val sourceUserId: Int) {
     var contentIntent: PendingIntent? = null
     // A fresh opaque generation for every notification snapshot, never a chat identifier.
     var snapshotToken: String = java.util.UUID.randomUUID().toString()
-    // Stable only for this in-memory, uninterrupted object/key/identity lifetime.
+    // Security generation only: rejects stale intents and is never a conversation identity.
     var routeToken: String = java.util.UUID.randomUUID().toString()
+    /** Stable system identity, independently persisted as an irreversible HMAC output. */
+    var conversationStableId: String = ""
+    var conversationIdentityKind: ConversationIdentityStore.Kind =
+        ConversationIdentityStore.Kind.TEMPORARY
     var sourceIdentity: String? = null
     var autoLearningConsidered = false
     var notificationKey: String? = null

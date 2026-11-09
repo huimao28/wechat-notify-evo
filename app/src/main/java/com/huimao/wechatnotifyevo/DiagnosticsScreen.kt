@@ -140,8 +140,8 @@ fun DiagnosticsRoute(onBack: () -> Unit) {
             openSettings(context, intent, DiagnosticsPlatform.standardSettingsIntent(Settings.ACTION_APP_NOTIFICATION_SETTINGS, context))
         },
         onClean = {
-            val count = DiagnosticsPlatform.cleanOrphanShortcuts(context)
-            toast(context, if (count >= 0) "已清理 $count 个 WNE 失效 Shortcut" else "清理失败，请稍后重试")
+            val count = DiagnosticsPlatform.repairConversationIdentities(context)
+            toast(context, if (count >= 0) "已修复 $count 个当前会话身份；未删除任何渠道" else "修复失败，请稍后重试")
             refresh()
         },
         onPreview = { previewReport = true },
@@ -316,8 +316,8 @@ private fun detectionSummary(state: DiagnosticRunState, snapshot: DiagnosticSnap
     OutlinedButton(battery, Modifier.fillMaxWidth()) { Text("打开电池优化设置") }
     TextButton(details, Modifier.fillMaxWidth()) { Text("打开应用详情") }
     HorizontalDivider()
-    TextButton(clean, Modifier.fillMaxWidth()) { Text("仅清理 WNE 失效 Shortcut") }
-    Text("不会自动修改系统设置，也不使用 Shizuku。", style = MaterialTheme.typography.bodySmall)
+    TextButton(clean, Modifier.fillMaxWidth()) { Text("修复会话身份") }
+    Text("只重发当前会话的稳定 shortcut/渠道；不会删除渠道、修改优先级或使用 Shizuku。", style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable private fun VendorCard(vendor: VendorFamily) = DiagnosticSection("厂商后台与气泡引导") {

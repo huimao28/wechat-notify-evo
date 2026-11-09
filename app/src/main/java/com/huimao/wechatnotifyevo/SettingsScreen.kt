@@ -510,7 +510,7 @@ private fun DiagnosticsSection(
                 Text("重新绑定监听服务")
             }
             Text(
-                "学习映射仅在内存；Main_User 随直达 shortcut 保存在系统本机，不显示、不记录日志、不上传。映射会在移除、身份变化、监听断开、关闭气泡内直达聊天或重启后清理。自动失败或跳过不会重试。",
+                "Main_User 仅在内存中用于当前直达，不写入 shortcut、日志或导出；本机只持久保存随机盐和不可逆 HMAC 身份。覆盖更新后身份保持，卸载重装会重置。既有随机会话升级后可能需要最后设置一次优先级。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
@@ -610,7 +610,7 @@ private fun DirectChatRiskDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("开启气泡内直达聊天？") },
         text = {
-            Text("确认开启时只保存开关，不刷新现有通知或 shortcut，也不会立即打开微信；功能从下一条新消息起生效。遇到尚未学习的新会话时，自动学习仍可能短暂打开微信并影响未读状态。每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发，5 秒无有效回调即放弃。系统必须允许本应用显示气泡。Main_User 会随 shortcut 保存在系统本机，不记录日志、不上传。关闭会立即失效在途结果、清理相关 shortcut，并取消当前进化通知以避免厂商系统触发旧气泡；请等待下一条新消息。")
+            Text("确认开启时只保存开关，不刷新现有通知或 shortcut，也不会立即打开微信；功能从下一条新消息起生效。遇到尚未学习的新会话时，自动学习仍可能短暂打开微信并影响未读状态。每个新会话最多尝试一次；进程内至少间隔 60 秒、每小时最多 6 次，忙碌或限频时跳过且不补发，5 秒无有效回调即放弃。系统必须允许本应用显示气泡。Main_User 不会写入 shortcut、日志或导出，仅持久保存不可逆身份。关闭会立即失效在途结果，并取消当前进化通知以避免厂商系统触发旧气泡；请等待下一条新消息。")
         },
         confirmButton = { TextButton(onClick = onConfirm) { Text("了解风险并开启") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
