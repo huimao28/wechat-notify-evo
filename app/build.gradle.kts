@@ -19,14 +19,14 @@ val releaseKeystoreType: String? = releaseKeystoreFile?.takeIf { it.exists() }?.
 
 android {
     namespace = "com.huimao.wechatnotifyevo"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.huimao.wechatnotifyevo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.0.20-beta.3"
+        versionCode = 27
+        versionName = "1.0.20-beta.4"
     }
 
     signingConfigs {
@@ -55,10 +55,6 @@ android {
         jvmTarget = "17"
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "2.0.21"
-    }
-
     buildFeatures {
         compose = true
     }
@@ -66,14 +62,16 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
-    val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
+    val composeBom = platform("androidx.compose:compose-bom:2026.05.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.activity:activity-compose:1.12.4")
+    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+    implementation("androidx.navigationevent:navigationevent:1.2.0")
+    implementation("androidx.navigationevent:navigationevent-compose:1.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

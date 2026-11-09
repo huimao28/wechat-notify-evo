@@ -16,7 +16,7 @@ jobs:
       # No gradle-wrapper.jar in this repo: use the Gradle distribution directly.
       - uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Build debug APK
         run: gradle testDebugUnitTest assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
