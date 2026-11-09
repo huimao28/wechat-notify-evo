@@ -38,6 +38,12 @@ object DiagnosticsPlatform {
             )?.count { it.id.startsWith("conv_") } ?: 0
         } catch (_: RuntimeException) { 0 } else 0
         val rateLimited = if (Build.VERSION.SDK_INT >= 25) try { shortcuts?.isRateLimitingActive == true } catch (_: RuntimeException) { false } else false
+        val (stableIdentityCount, temporaryIdentityCount) = ConversationIdentityStore.counts(app)
+        val conversationChannelCount = if (Build.VERSION.SDK_INT >= 30) try {
+            nm?.notificationChannels?.count {
+                it.conversationId?.startsWith(ConversationIdentityCore.PREFIX) == true
+            } ?: 0
+        } catch (_: RuntimeException) { 0 } else 0
         val weChat = packageState(app, WECHAT)
         val auto = packageState(app, ANDROID_AUTO)
         val appBubble = if (Build.VERSION.SDK_INT >= 31) try {
@@ -64,7 +70,10 @@ object DiagnosticsPlatform {
             DiagnosticStatus("系统气泡支持", if (Build.VERSION.SDK_INT >= 30) "支持" else "不支持", Build.VERSION.SDK_INT >= 30),
             DiagnosticStatus("应用级气泡偏好", appBubble),
             DiagnosticStatus("渠道 allowBubbles", channelBubble),
+            DiagnosticStatus("稳定会话身份", "$stableIdentityCount 个"),
+            DiagnosticStatus("临时会话身份", "$temporaryIdentityCount 个"),
             DiagnosticStatus("当前 WNE 会话 Shortcut", "$shortcutCount 个"),
+            DiagnosticStatus("会话专属渠道", "$conversationChannelCount 个"),
             DiagnosticStatus("ShortcutManager 限流", if (rateLimited) "活跃" else "未限流", !rateLimited),
             DiagnosticStatus("微信", if (weChat.installed) "已安装${if (weChat.enabled) "且启用" else "但已停用"}" else "未安装", weChat.installed && weChat.enabled),
             DiagnosticStatus("微信版本", weChat.version ?: "未检测"),
@@ -84,21 +93,12 @@ object DiagnosticsPlatform {
     private fun shortcutManager(context: Context): ShortcutManager? =
         if (Build.VERSION.SDK_INT >= 25) context.getSystemService(ShortcutManager::class.java) else null
 
-    fun cleanOrphanShortcuts(context: Context): Int {
-        if (Build.VERSION.SDK_INT < 30) return 0
-        val sm = shortcutManager(context) ?: return 0
-        return try {
-            val all = sm.getShortcuts(ShortcutManager.FLAG_MATCH_DYNAMIC or ShortcutManager.FLAG_MATCH_CACHED or ShortcutManager.FLAG_MATCH_PINNED)
-            val live = ConversationStore.allForUser(CurrentUserScope.id()).map(ConversationShortcuts::shortcutId).toSet()
-            val ids = ShortcutCleanupPolicy.orphanIds(all.map { it.id }, live)
-            if (ids.isNotEmpty()) {
-                sm.disableShortcuts(ids)
-                sm.removeDynamicShortcuts(ids)
-                sm.removeLongLivedShortcuts(ids)
-            }
-            ids.size
-        } catch (_: RuntimeException) { -1 }
-    }
+    fun repairConversationIdentities(context: Context): Int = try {
+        val current = ConversationStore.allForUser(CurrentUserScope.id())
+            .filter(CurrentUserScope::accepts)
+        current.forEach { WeChatListenerService.repostConversation(context, it, silent = true) }
+        current.size
+    } catch (_: RuntimeException) { -1 }
 
     fun report(context: Context): String = DiagnosticReportBuilder.build(snapshot(context), InMemoryDiagnostics.snapshot())
 

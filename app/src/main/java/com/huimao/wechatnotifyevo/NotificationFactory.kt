@@ -67,6 +67,23 @@ object NotificationFactory {
         else -> CHANNEL_MESSAGE
     }
 
+    /** Create once. Never recreate or delete: user-locked sound/importance/bubble state must survive. */
+    fun ensureConversationChannel(context: Context, conv: Conversation): String {
+        val parentId = channelFor(conv.type)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !conv.shortcutPushed) return parentId
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return parentId
+        val shortcutId = ConversationShortcuts.shortcutId(conv)
+        val id = ConversationChannelPolicy.channelId(parentId, shortcutId)
+        if (ConversationChannelPolicy.shouldCreate(nm.getNotificationChannel(id) != null,
+                conv.shortcutPushed)) {
+            val parent = nm.getNotificationChannel(parentId) ?: return parentId
+            val channel = NotificationChannel(id, conv.title, parent.importance)
+            channel.setConversationId(parentId, shortcutId)
+            nm.createNotificationChannel(channel)
+        }
+        return if (nm.getNotificationChannel(id) != null) id else parentId
+    }
+
     fun groupKeyFor(type: ConversationType): String = when (type) {
         ConversationType.GROUP -> GROUP_GROUP
         ConversationType.BOT -> GROUP_BOT
@@ -96,7 +113,8 @@ object NotificationFactory {
     private fun messagePerson(conv: Conversation, sender: String, avatar: Icon?): Person {
         val builder = Person.Builder()
             .setName(sender)
-            .setKey("sender_${conv.nid}_$sender")
+            .setKey(ConversationPersonKeys.sender(ConversationShortcuts.shortcutId(conv), sender))
+            .setBot(false)
         if (conv.type != ConversationType.GROUP) {
             avatar?.let { builder.setIcon(it) }
         }
@@ -163,7 +181,7 @@ object NotificationFactory {
         val selfName = context.getString(R.string.self_display_name)
         val style = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             Notification.MessagingStyle(
-                Person.Builder().setName(selfName).setKey("wne_self").build()
+                Person.Builder().setName(selfName).setKey(ConversationPersonKeys.SELF).setBot(false).build()
             )
         } else {
             @Suppress("DEPRECATION")
@@ -182,7 +200,7 @@ object NotificationFactory {
         val metadata = ConversationMetadataPolicy.forConversation(conv.title, conv.type)
         style.conversationTitle = metadata.conversationTitle
         style.isGroupConversation = metadata.isGroupConversation
-        val builder = Notification.Builder(context, channelFor(conv.type))
+        val builder = Notification.Builder(context, ensureConversationChannel(context, conv))
             .setSmallIcon(smallIcon(context, conv))
             .setColor(WECHAT_GREEN)
             .setCategory(Notification.CATEGORY_MESSAGE)
@@ -198,7 +216,8 @@ object NotificationFactory {
             .setOnlyAlertOnce(silent)
         // Android 11+: link the notification to its conversation shortcut so
         // the system offers per-conversation priority/silent settings.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            ConversationPublicationPolicy.associateAsConversation(conv.shortcutPushed)) {
             builder.setShortcutId(ConversationShortcuts.shortcutId(conv))
             builder.setLocusId(LocusId(ConversationShortcuts.shortcutId(conv)))
         }

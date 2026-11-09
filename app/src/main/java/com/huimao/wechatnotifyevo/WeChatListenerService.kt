@@ -278,6 +278,11 @@ class WeChatListenerService : NotificationListenerService() {
         conv.directChatEligible = Prefs.isDirectChatEnabled(this)
         InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.BUBBLE_ELIGIBILITY)
         conv.title = title
+        val identityResolution = ConversationIdentityStore.resolve(
+            this, conv.nid, conv.sourceUserId, conv.title, conv.sourceIdentity
+        )
+        conv.conversationStableId = identityResolution.id
+        conv.conversationIdentityKind = identityResolution.kind
         conv.smallIcon = n.smallIcon
         // Keep the last known avatar: WeChat posts no large icon for a
         // multi-sender group message, and overwriting with null would

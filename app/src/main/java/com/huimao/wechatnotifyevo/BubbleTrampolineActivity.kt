@@ -2,6 +2,8 @@ package com.huimao.wechatnotifyevo
 
 import android.app.Activity
 import android.app.ActivityOptions
+import android.content.ComponentName
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -140,15 +142,19 @@ class BubbleTrampolineActivity : Activity() {
             finish()
             return
         }
-        val conv = ConversationStore.get(nid, sourceUserId)
-        val pi = conv?.takeIf {
+        val conv = ConversationStore.get(nid, sourceUserId)?.takeIf {
             CurrentUserScope.accepts(it) && intent.getStringExtra("snapshot") == it.routeToken
-        }?.contentIntent
+        }
+        val pi = conv?.contentIntent
         if (pi == null) {
             Log.w(TAG, "No live content intent")
             finish()
             return
         }
+        // Main_User is used only in this foreground, explicit launch. It is never
+        // persisted in ShortcutInfo, preferences, logs or diagnostics.
+        if (Prefs.isLauncherControlEnabled(this) && conv.learnedMainUser != null &&
+            launchLearnedConversation(conv.learnedMainUser!!)) return
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 // Grant only this user-triggered send our sender-side BAL privileges.
@@ -174,6 +180,23 @@ class BubbleTrampolineActivity : Activity() {
             Toast.makeText(this, "未能打开微信界面", Toast.LENGTH_SHORT).show()
             finish()
         }
+    }
+
+    private fun launchLearnedConversation(mainUser: String): Boolean {
+        val component = ComponentName(
+            WeChatListenerService.WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI"
+        )
+        val info = try { packageManager.getActivityInfo(component, 0) } catch (_: Exception) { null }
+        if (info == null || !info.exported || !info.enabled || !info.applicationInfo.enabled ||
+            !info.permission.isNullOrEmpty()) return false
+        return try {
+            startActivity(Intent(Intent.ACTION_MAIN).setComponent(component)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .putExtra("Main_User", mainUser)
+                .putExtra("Intro_Is_Muti_Talker", false))
+            forwarded = true
+            true
+        } catch (_: RuntimeException) { false }
     }
 
     override fun onDestroy() {
