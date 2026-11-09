@@ -37,8 +37,9 @@ jobs:
         with:
           name: 微信通知进化 ${{ github.ref_name }}
           body_path: RELEASE_NOTES.md
-          # v1.0.20-beta.5 is intentionally a non-draft pre-release; make_latest=false keeps v1.0.19 latest.
-          prerelease: true
-          make_latest: false
+          # Stable tags publish a non-draft, non-prerelease release and promote it to latest.
+          draft: false
+          prerelease: false
+          make_latest: true
           files: app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true

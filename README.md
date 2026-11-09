@@ -69,13 +69,12 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 - 系统还必须允许本应用显示气泡；最终是否显示、是否在气泡窗口内承载微信界面，
   由 Android、系统桌面和微信版本共同决定。
 
-## 已知限制（v1.0.20-beta.5）
+## 已知限制（v1.0.20）
 
-- 从旧随机 ID 首次迁移到稳定会话 ID 时，Android 无公开 API 复制用户锁定设置，既有会话可能需要最后设置一次优先/默认/静音或气泡；应用不能替用户设为优先。完成迁移后覆盖更新会保留设置；卸载重装会重置本机盐与会话身份。
-- beta.3 延续已回退的严格过滤策略：用户空间隔离只拒绝通知来源中明确的非当前 Android 用户；系统/未知负值会按当前用户放行，
-  `PendingIntent` 创建用户仅用于诊断、不参与拒绝。它只隔离标准独立 Android 用户或工作资料；
-  ColorOS 同用户分身无法可靠区分，请在系统中将主微信设为默认打开。
-- 可选 FGS + `JobScheduler` watchdog 只提高可靠性；省电策略、厂商后台限制、强行停止仍可使其失效。
+- 模拟回复只在 WNE 当前进程本地回显，**不会发送到微信**；模拟已读只清理 WNE 本地通知、内存会话与 shortcut，**不会改变微信未读状态**。
+- 从旧随机 ID 首次迁移到稳定会话 ID 时，Android 无公开 API 复制用户锁定设置，既有会话可能需要最后重设一次优先/默认/静音或气泡；应用不能替用户设为优先。完成迁移后覆盖更新会保留设置；卸载重装会重置本机盐与会话身份。
+- 用户空间隔离只拒绝通知来源中明确的非当前 Android 用户；系统/未知负值会按当前用户放行，`PendingIntent` 创建用户仅用于诊断、不参与拒绝。它只隔离标准独立 Android 用户或工作资料；ColorOS 主微信与同一 `UserHandle` 的应用分身无法可靠区分，请在系统中将主微信设为默认打开。
+- 厂商气泡与保活行为不作保证：可选 FGS + `JobScheduler` watchdog 只提高可靠性；省电策略、厂商后台限制、系统桌面、微信版本或强行停止仍可能使气泡、直达聊天或保活失效。
 - 首次遇到新会话时自动学习可能短暂打开微信并影响未读状态；系统也可能拦截后台启动。
 - 每个新会话只尝试一次，5 秒无有效回调即放弃；限频或失败不会自动补学。
 - 微信 `LauncherUI` 不可用时无法建立直达入口；shortcut 更新受系统限流。
@@ -89,7 +88,7 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 - 本地：Android Studio（minSdk 26、target/compileSdk 35、Java 17、Gradle 8.9）。
 - CI：`.github/workflows/android.yml` 对分支运行 `testDebugUnitTest assembleDebug` 并上传 debug APK。
-- Release：先确认标签不存在；仅在 main 的 `testDebugUnitTest assembleDebug` 成功后创建并推送 annotated tag `v*`。`.github/workflows/release.yml` 使用仓库 Secrets 解码正式 keystore、运行 `assembleRelease`，并将 `app-release.apk` 发布到对应 GitHub Release；beta 标签固定为 Pre-release、非 Draft 且 `make_latest: false`，不取代最新稳定版。
+- Release：先确认标签不存在；仅在 main 的 `testDebugUnitTest assembleDebug` 成功后创建并推送 annotated tag `v*`。`.github/workflows/release.yml` 使用仓库 Secrets 解码正式 keystore、运行 `assembleRelease`，并将 `app-release.apk` 发布到对应非 Draft、非 Pre-release 的 GitHub Release，同时设为 latest。
 - 仓库不带 `gradle-wrapper.jar`，CI 使用 `gradle/actions/setup-gradle` 安装 Gradle 8.9。
 
 ## 致谢与来源
