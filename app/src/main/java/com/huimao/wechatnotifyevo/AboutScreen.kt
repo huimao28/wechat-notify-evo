@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2026 huimao28 and WeChat Notify Evolution contributors
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.huimao.wechatnotifyevo
 
 import android.content.ActivityNotFoundException
@@ -118,11 +122,15 @@ fun AboutScreen(onBack: (() -> Unit)? = null) {
             }
             item {
                 AboutCard(stringResource(R.string.about_license_title)) {
+                    val licenseUrl = stringResource(R.string.about_license_url)
                     Text(
-                        stringResource(R.string.about_license_missing),
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                        stringResource(R.string.about_license_summary),
+                        modifier = Modifier
+                            .clickable { context.openWebUrl(licenseUrl) }
+                            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                            .semantics { role = Role.Button },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }

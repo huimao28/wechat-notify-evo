@@ -1,13 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- WeChat-style white chat bubbles within the adaptive-icon safe area. -->
+<!--
+  SPDX-FileCopyrightText: 2026 huimao28 and WeChat Notify Evolution contributors
+  SPDX-License-Identifier: GPL-3.0-only
+  Original generic WNE notification mark; not derived from WeChat artwork.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <group android:scaleX="0.68" android:scaleY="0.68"
-        android:pivotX="12" android:pivotY="12">
-        <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
-            android:pathData="M10,2 C5,2 1,5.3 1,9.4 C1,11.6 2.2,13.5 4.1,14.9 L3.4,17.3 L6.4,15.8 C7.2,16.1 8.1,16.3 9,16.4 C8.7,15.7 8.6,15 8.6,14.3 C8.6,10.7 11.8,7.8 15.9,7.8 C16.8,7.8 17.6,7.9 18.4,8.2 C17.7,4.7 14.2,2 10,2 Z M6.5,6.1 A0.8,0.8 0,1 0,6.5 7.7 A0.8,0.8 0,1 0,6.5 6.1 Z M12.6,6.1 A0.8,0.8 0,1 0,12.6 7.7 A0.8,0.8 0,1 0,12.6 6.1 Z M16,9 C12.1,9 9.3,11.4 9.3,14.4 C9.3,17.4 12.1,19.8 16,19.8 C16.7,19.8 17.5,19.7 18.2,19.5 L20.8,20.9 L20.2,18.6 C21.9,17.6 23,16 23,14.4 C23,11.4 19.9,9 16,9 Z M13.5,12 A0.65,0.65 0,1 0,13.5 13.3 A0.65,0.65 0,1 0,13.5 12 Z M18.4,12 A0.65,0.65 0,1 0,18.4 13.3 A0.65,0.65 0,1 0,18.4 12 Z" />
-    </group>
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M25,25 L83,25 Q89,25 89,31 L89,70 Q89,76 83,76 L62,76 L54,85 L46,76 L25,76 Q19,76 19,70 L19,31 Q19,25 25,25 Z" />
+    <path
+        android:fillColor="#FF315EFB"
+        android:pathData="M30,39 L37,39 L42,58 L48,39 L55,39 L61,58 L66,39 L73,39 L65,66 L58,66 L51.5,48 L45,66 L38,66 Z" />
+    <path
+        android:fillColor="#FFFFC107"
+        android:pathData="M79,17 A10,10 0,1 1,78.9 17 Z" />
 </vector>

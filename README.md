@@ -96,10 +96,9 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 - 感谢 Oasis Feng 开发 [Nevolution](https://github.com/Nevolution)（中文名“女娲石·通知进化”），
   以及由此推动的通知进化理念与生态。“女娲石”在此指 Nevolution，并非另一位个人。
 - 感谢 Nevolution 官方[微信通知进化实现/插件](https://github.com/Nevolution/decorator-wechat)
-  （Apache 2.0）在会话归档、计数前缀、发送者切分和 car-extender 转发等方面带来的探索与启发；
-  本应用为独立重写。
+  （Apache 2.0）带来的行为研究与探索启发；WNE 未复制或移植其实现代码，而是基于 Android 公开 API 独立实现。
 - 感谢 ichenhe 的 [QQ-Notify-Evolution（企鹅通知进化）](https://github.com/ichenhe/QQ-Notify-Evolution)
-  带来的开源参考。
+  带来的行为与配置参考；WNE 未复制其代码或素材。
 - 感谢 [Fahrmony](https://github.com/nexen33/Fahrmony) 的开源参考；其 CC BY-NC 4.0 项目仅用于兼容行为研究，WNE 未复制其代码并独立基于 Android 公开 API 实现。本致谢不表示 Fahrmony 作者对 WNE 背书。
 - 感谢参与测试、反馈、逆向排查与兼容验证的社区用户和贡献者。
 
@@ -120,3 +119,10 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 - 默认不选会话且不会自动总结：用户必须选择会话、预览原文并二次确认；**仅用户确认后才联网**，总结仅驻留内存。
 - 新增 `INTERNET` 权限仅用于上述用户确认后的 AI 请求和用户主动连接测试。仅支持 HTTPS 443，不支持 stream、redirect 或自定义端口。
 - 包含 v1.0.20.1 气泡学习修复。复制或分享会使内容进入剪贴板或外部应用，请自行评估风险。
+
+
+## 许可证与源码
+
+WNE 项目自有代码与原创资源以 **GNU General Public License v3.0 only (`GPL-3.0-only`)** 发布。完整条款见 [LICENSE](LICENSE)，版权与迁移说明见 [NOTICE](NOTICE)，第三方依赖、研究参考及素材边界见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。源码仓库：<https://github.com/huimao28/wechat-notify-evo>。
+
+发行 APK 使用原创通用 WNE 矢量启动图标，不再分发从微信 APK 获取的原版 launcher 图标。微信/Tencent 名称与商标归其权利人所有，本项目与其无隶属或背书关系。
