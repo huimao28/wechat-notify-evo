@@ -88,7 +88,7 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 - 本地：Android Studio（minSdk 26、target/compileSdk 35、Java 17、Gradle 8.9）。
 - CI：`.github/workflows/android.yml` 对分支运行 `testDebugUnitTest assembleDebug` 并上传 debug APK。
-- Release：先确认标签不存在；仅在 main 的 `testDebugUnitTest assembleDebug` 成功后创建并推送 annotated tag `v*`。`.github/workflows/release.yml` 使用仓库 Secrets 解码正式 keystore、运行 `assembleRelease`，并将 `app-release.apk` 发布到对应非 Draft、非 Pre-release 的 GitHub Release，同时设为 latest。
+- Release：先确认标签不存在；仅在 main 的 `testDebugUnitTest assembleDebug` 成功后创建并推送 annotated tag `v*`。`.github/workflows/release.yml` 使用仓库 Secrets 解码正式 keystore、运行 `assembleRelease`，并将 `app-release.apk` 发布到对应 Release；带连字符的版本自动设为 Pre-release、非 Draft，且不改变 latest（当前稳定版保持 v1.0.20.1）。
 - 仓库不带 `gradle-wrapper.jar`，CI 使用 `gradle/actions/setup-gradle` 安装 Gradle 8.9。
 
 ## 致谢与来源
@@ -104,6 +104,13 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 - 感谢参与测试、反馈、逆向排查与兼容验证的社区用户和贡献者。
 
 以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。
+
+## v1.1.0-beta.2 Pre-release：Android Auto 真实连接检测
+
+- 使用 AndroidX Car App 官方 `CarConnection` 实时检测 `NOT_CONNECTED`、`NATIVE`、`PROJECTION`、`UNKNOWN`；Android Auto DHU 投影连接应显示 `PROJECTION`。
+- Android Auto 包安装/启用状态与实际车载连接状态分开展示，不再把“已安装”误作“已连接”。
+- 观察器绑定界面生命周期并安全释放；重复状态不会造成重复刷新。
+- 完整包含 v1.1.0-beta.1 的本地加密消息记录、隐私优先 BYOK AI 总结与五 Tab 界面，以及 v1.0.20.1 气泡学习修复。
 
 ## v1.1.0-beta.1 Pre-release：本地历史与 AI 总结
 

@@ -37,7 +37,7 @@ jobs:
         with:
           name: 微信通知进化 ${{ github.ref_name }}
           body_path: RELEASE_NOTES.md
-          # Hyphenated tags (for example v1.1.0-beta.1) are prereleases and never replace latest.
+          # Hyphenated tags (for example v1.1.0-beta.2) are prereleases and never replace latest.
           # Stable tags remain non-prerelease and are promoted to latest.
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
