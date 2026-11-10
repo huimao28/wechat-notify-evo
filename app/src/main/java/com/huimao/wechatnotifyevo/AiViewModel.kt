@@ -46,7 +46,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         val optional = apiKey.takeIf { it.isNotEmpty() }
         AiConfigStore.save(app, endpoint, model, optional, secrets)
             .onSuccess { config -> mutableState.update { it.copy(config = config, phase = if (it.selectedIds.isEmpty()) AiPhase.Selecting else it.phase, testStatus = "配置已保存") } }
-            .onFailure { mutableState.update { it.copy(testStatus = it.message ?: "配置无效") } }
+            .onFailure { error -> mutableState.update { it.copy(testStatus = error.message ?: "配置无效") } }
     }
 
     fun setRange(range: AiRange) {
