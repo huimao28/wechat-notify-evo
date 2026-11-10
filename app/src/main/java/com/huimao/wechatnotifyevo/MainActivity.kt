@@ -39,8 +39,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppContent(historyViewModel: HistoryViewModel = viewModel()) {
+private fun AppContent(
+    historyViewModel: HistoryViewModel = viewModel(),
+    aiViewModel: AiViewModel = viewModel(),
+) {
     val historyState by historyViewModel.state.collectAsStateWithLifecycle()
+    val aiState by aiViewModel.state.collectAsStateWithLifecycle()
     val backStack = remember { mutableStateListOf<AppRoute>(HomeRoute) }
     val current = backStack.lastOrNull() ?: HomeRoute
     val selectedTab = TopLevelNavigationPolicy.tabFor(current)
@@ -88,13 +92,22 @@ private fun AppContent(historyViewModel: HistoryViewModel = viewModel()) {
                 entry<HistoryDetailRoute> {
                     HistoryDetailScreen(historyState, ::navigateBack, historyViewModel::loadMoreMessages, historyViewModel::deleteConversation, historyViewModel::clearAll)
                 }
-                entry<AiRoute> { AiPlaceholderScreen() }
+                entry<AiRoute> {
+                    AiSummaryScreen(aiState, AiScreenActions(
+                        aiViewModel::setRange, aiViewModel::toggleConversation, aiViewModel::preview,
+                        aiViewModel::requestConfirmation, aiViewModel::dismissConfirmation,
+                        aiViewModel::generate, aiViewModel::cancel, aiViewModel::retry, aiViewModel::onLeave,
+                    ))
+                }
                 entry<SettingsRouteKey> {
                     SettingsRoute(
                         onOpenAbout = { switchTab(TopLevelTab.ABOUT) },
                         onOpenDiagnostics = { openDetail(DiagnosticsRouteKey) },
                         privacyContent = {
                             HistoryPrivacySettingsCard(historyState, historyViewModel::setRecordingEnabled, historyViewModel::setRetention, historyViewModel::saveExcluded, historyViewModel::clearAll)
+                        },
+                        aiContent = {
+                            AiSettingsCard(aiState, aiViewModel::saveConfig, aiViewModel::testConnection)
                         },
                     )
                 }
