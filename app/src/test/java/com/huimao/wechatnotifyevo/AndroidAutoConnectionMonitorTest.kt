@@ -4,6 +4,7 @@ import androidx.car.app.connection.CarConnection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -17,6 +18,17 @@ class AndroidAutoConnectionMonitorTest {
     @Test fun mapsNullAndFutureValuesToUnknown() {
         assertEquals(AndroidAutoConnectionType.UNKNOWN, AndroidAutoConnectionMonitor.mapConnectionType(null))
         assertEquals(AndroidAutoConnectionType.UNKNOWN, AndroidAutoConnectionMonitor.mapConnectionType(Int.MAX_VALUE))
+    }
+
+    @Test fun sameTypePreservesStateAndTimestamp() {
+        val current = AndroidAutoConnectionState(AndroidAutoConnectionType.PROJECTION, 100L)
+        val unchanged = AndroidAutoConnectionStateStore.nextState(current, AndroidAutoConnectionType.PROJECTION, 200L)
+        assertSame(current, unchanged)
+        assertEquals(100L, unchanged.updatedAtMillis)
+
+        val changed = AndroidAutoConnectionStateStore.nextState(current, AndroidAutoConnectionType.NOT_CONNECTED, 300L)
+        assertEquals(AndroidAutoConnectionType.NOT_CONNECTED, changed.type)
+        assertEquals(300L, changed.updatedAtMillis)
     }
 
     @Test fun diagnosticsTextAndHealthPreserveAllStates() {

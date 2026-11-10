@@ -33,9 +33,20 @@ object AndroidAutoConnectionStateStore {
 
     fun current(): AndroidAutoConnectionState = mutableState.value
 
-    internal fun update(type: AndroidAutoConnectionType, nowMillis: Long = System.currentTimeMillis()) {
-        mutableState.value = AndroidAutoConnectionState(type, nowMillis)
+    internal fun update(type: AndroidAutoConnectionType, nowMillis: Long = System.currentTimeMillis()): Boolean {
+        val current = mutableState.value
+        val next = nextState(current, type, nowMillis)
+        if (next === current) return false
+        mutableState.value = next
+        return true
     }
+
+    internal fun nextState(
+        current: AndroidAutoConnectionState,
+        type: AndroidAutoConnectionType,
+        nowMillis: Long,
+    ): AndroidAutoConnectionState =
+        if (current.type == type) current else AndroidAutoConnectionState(type, nowMillis)
 }
 
 /** Observes CarConnection only while the diagnostics lifecycle is active. */
