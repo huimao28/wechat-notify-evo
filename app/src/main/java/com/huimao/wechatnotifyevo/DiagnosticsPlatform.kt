@@ -14,12 +14,17 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 
 object DiagnosticsPlatform {
     private const val WECHAT = "com.tencent.mm"
     private const val ANDROID_AUTO = "com.google.android.projection.gearhead"
 
-    fun snapshot(context: Context): DiagnosticSnapshot {
+    fun snapshot(
+        context: Context,
+        autoConnection: AndroidAutoConnectionState = AndroidAutoConnectionStateStore.current(),
+    ): DiagnosticSnapshot {
         val app = context.applicationContext
         val nm = app.getSystemService(NotificationManager::class.java)
         val listenerGranted = try {
@@ -80,11 +85,31 @@ object DiagnosticsPlatform {
             DiagnosticStatus("ShortcutManager 限流", if (rateLimited) "活跃" else "未限流", !rateLimited),
             DiagnosticStatus("微信", if (weChat.installed) "已安装${if (weChat.enabled) "且启用" else "但已停用"}" else "未安装", weChat.installed && weChat.enabled),
             DiagnosticStatus("微信版本", weChat.version ?: "未检测"),
-            DiagnosticStatus("Android Auto", if (auto.installed) "仅包已安装；投影连接未检测" else "未检测到包；投影连接未检测"),
+            DiagnosticStatus("Android Auto 包", if (auto.installed) "已安装${if (auto.enabled) "且启用" else "但已停用"}" else "未安装", auto.installed && auto.enabled),
+            DiagnosticStatus("Android Auto 包版本", auto.version ?: "未检测"),
+            DiagnosticStatus("Android Auto 连接", connectionDescription(autoConnection.type), connectionHealth(autoConnection.type)),
+            DiagnosticStatus("Android Auto 连接检测", "${autoConnection.source}；最近更新：${connectionUpdatedAt(autoConnection.updatedAtMillis)}"),
         )
         val version = try { app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "未知" } catch (_: Exception) { "未知" }
         return DiagnosticSnapshot(version, statuses, Build.MANUFACTURER, Build.BRAND, Build.MODEL, "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
     }
+
+    internal fun connectionDescription(type: AndroidAutoConnectionType): String = when (type) {
+        AndroidAutoConnectionType.NOT_CONNECTED -> "未连接"
+        AndroidAutoConnectionType.NATIVE -> "运行于 Android Automotive OS"
+        AndroidAutoConnectionType.PROJECTION -> "已连接 Android Auto 投影"
+        AndroidAutoConnectionType.UNKNOWN -> "连接状态未知（检测中或车载 host 未提供状态）"
+    }
+
+    internal fun connectionHealth(type: AndroidAutoConnectionType): Boolean? = when (type) {
+        AndroidAutoConnectionType.PROJECTION, AndroidAutoConnectionType.NATIVE -> true
+        AndroidAutoConnectionType.NOT_CONNECTED -> false
+        AndroidAutoConnectionType.UNKNOWN -> null
+    }
+
+    private fun connectionUpdatedAt(updatedAtMillis: Long?): String = updatedAtMillis?.let {
+        DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(Date(it))
+    } ?: "尚未收到状态"
 
     data class PackageState(val installed: Boolean, val enabled: Boolean, val version: String?)
     private fun packageState(context: Context, name: String): PackageState = try {

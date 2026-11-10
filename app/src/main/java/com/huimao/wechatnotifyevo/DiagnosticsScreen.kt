@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,6 +67,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.CancellationException
@@ -77,7 +80,15 @@ import kotlinx.coroutines.withContext
 fun DiagnosticsRoute(onBack: () -> Unit) {
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val connectionMonitor = remember(appContext) { AndroidAutoConnectionMonitor(appContext) }
+    val autoConnection by AndroidAutoConnectionStateStore.state.collectAsStateWithLifecycle()
     val animationsEnabled = ValueAnimator.areAnimatorsEnabled()
+
+    DisposableEffect(connectionMonitor, lifecycleOwner) {
+        connectionMonitor.start(lifecycleOwner)
+        onDispose(connectionMonitor::stop)
+    }
     var requestId by rememberSaveable { mutableIntStateOf(0) }
     var phase by remember { mutableStateOf<DiagnosticRunState>(DiagnosticRunState.Running(System.currentTimeMillis())) }
     var snapshot by remember { mutableStateOf<DiagnosticSnapshot?>(null) }
@@ -91,11 +102,11 @@ fun DiagnosticsRoute(onBack: () -> Unit) {
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh() }
-    LaunchedEffect(requestId) {
+    LaunchedEffect(requestId, autoConnection) {
         val started = (phase as? DiagnosticRunState.Running)?.startedAtMillis ?: System.currentTimeMillis()
         try {
             val result = withContext(Dispatchers.Default) {
-                DiagnosticsPlatform.snapshot(appContext) to InMemoryDiagnostics.snapshot()
+                DiagnosticsPlatform.snapshot(appContext, autoConnection) to InMemoryDiagnostics.snapshot()
             }
             val remaining = MinimumDetectionDisplay.remainingMillis(
                 startedAtMillis = started,
