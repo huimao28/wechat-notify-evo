@@ -34,6 +34,12 @@ data class CapturedMessageEntity(
     val dedupeDigest: String,
 )
 
+data class ConversationSummaryEntity(
+    val conversationStableId: String,
+    val lastTimestamp: Long,
+    val messageCount: Int,
+)
+
 @Dao
 interface HistoryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -52,6 +58,15 @@ interface HistoryDao {
 
     @Query("SELECT COUNT(*) FROM captured_messages")
     suspend fun count(): Int
+
+    @Query("SELECT conversationStableId, MAX(timestamp) AS lastTimestamp, COUNT(*) AS messageCount FROM captured_messages WHERE timestamp >= :from GROUP BY conversationStableId ORDER BY lastTimestamp DESC LIMIT :limit OFFSET :offset")
+    suspend fun conversationSummaries(from: Long, limit: Int, offset: Int): List<ConversationSummaryEntity>
+
+    @Query("SELECT * FROM captured_messages WHERE conversationStableId = :id ORDER BY timestamp DESC, id DESC LIMIT 1")
+    suspend fun latestConversationMessage(id: String): CapturedMessageEntity?
+
+    @Query("SELECT COALESCE(SUM(LENGTH(title_ciphertext) + LENGTH(sender_ciphertext) + LENGTH(text_ciphertext) + LENGTH(title_nonce) + LENGTH(sender_nonce) + LENGTH(text_nonce)), 0) FROM captured_messages")
+    suspend fun encryptedBytes(): Long
 
     @Query("DELETE FROM captured_messages WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long): Int

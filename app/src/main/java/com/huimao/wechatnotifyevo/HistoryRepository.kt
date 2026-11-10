@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -20,6 +22,18 @@ data class HistoryMessage(
     val incoming: Boolean,
     val source: String,
 )
+
+data class ConversationHistorySummary(
+    val stableId: String,
+    val title: String,
+    val lastTimestamp: Long,
+    val messageCount: Int,
+    val titleDecryptionFailed: Boolean,
+)
+
+data class HistoryStats(val count: Int, val encryptedBytes: Long)
+
+class HistoryReadException(cause: Throwable) : Exception(cause)
 
 data class StoredHistoryMessage(
     val id: Long,
@@ -78,10 +92,36 @@ class HistoryRepository(
         ) != INSERT_IGNORED
     }
 
+    suspend fun conversationPage(
+        from: Long,
+        limit: Int,
+        offset: Int = 0,
+    ): List<ConversationHistorySummary> = withContext(ioDispatcher) {
+        dao.conversationSummaries(from, limit.coerceIn(1, 100), offset.coerceAtLeast(0)).map { row ->
+            val titleResult = runCatching {
+                dao.latestConversationMessage(row.conversationStableId)?.let { crypto.decrypt(it.title) }
+                    .orEmpty()
+            }
+            ConversationHistorySummary(
+                stableId = row.conversationStableId,
+                title = titleResult.getOrNull()?.takeIf(String::isNotBlank) ?: "无法读取的会话",
+                lastTimestamp = row.lastTimestamp,
+                messageCount = row.messageCount,
+                titleDecryptionFailed = titleResult.isFailure,
+            )
+        }
+    }
+
+    suspend fun stats(): HistoryStats = withContext(ioDispatcher) {
+        HistoryStats(dao.count(), dao.encryptedBytes())
+    }
+
     suspend fun messages(from: Long, limit: Int, offset: Int = 0): List<StoredHistoryMessage> =
         withContext(ioDispatcher) {
             dao.messages(from, limit.coerceIn(1, HistoryPolicy.MAX_ROWS), offset.coerceAtLeast(0))
-                .map(::decrypt)
+                .map { entity ->
+                    try { decrypt(entity) } catch (error: Throwable) { throw HistoryReadException(error) }
+                }
         }
 
     suspend fun conversationMessages(
@@ -95,8 +135,12 @@ class HistoryRepository(
             from,
             limit.coerceIn(1, HistoryPolicy.MAX_ROWS),
             offset.coerceAtLeast(0),
-        ).map(::decrypt)
+        ).map { entity ->
+            try { decrypt(entity) } catch (error: Throwable) { throw HistoryReadException(error) }
+        }
     }
+
+    suspend fun trimBefore(cutoff: Long): Int = withContext(ioDispatcher) { dao.deleteOlderThan(cutoff) }
 
     suspend fun deleteConversation(stableConversationId: String): Int = withContext(ioDispatcher) {
         dao.deleteConversation(stableConversationId)
@@ -122,7 +166,13 @@ class HistoryRepository(
     }
 }
 
-private object AndroidHistoryRepository {
+object HistoryEvents {
+    private val mutableChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val changes = mutableChanges.asSharedFlow()
+    fun notifyChanged() { mutableChanges.tryEmit(Unit) }
+}
+
+object AndroidHistoryRepository {
     @Volatile private var instance: HistoryRepository? = null
 
     fun get(context: Context): HistoryRepository = instance ?: synchronized(this) {
@@ -155,6 +205,7 @@ object HistoryRecorder {
         val appContext = context.applicationContext
         scope.launch {
             runCatching { AndroidHistoryRepository.get(appContext).record(input) }
+                .onSuccess { inserted -> if (inserted) HistoryEvents.notifyChanged() }
                 .onFailure { Log.w(TAG, "Local history write failed: ${it.javaClass.simpleName}") }
         }
     }
