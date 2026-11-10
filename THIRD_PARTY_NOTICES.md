@@ -16,9 +16,11 @@ Before a release, generate/review the resolved dependency graph (`./gradlew :app
 
 These acknowledgements do not imply endorsement.
 
-## Removed/excluded restricted material
+## Launcher icon material excluded from GPL licensing
 
-Earlier revisions contained launcher raster resources named `wechat_launcher_background.webp` and `wechat_launcher_foreground.webp`, reported as originating from the WeChat APK. Tencent's original WeChat launcher artwork is not project-owned and cannot be relicensed as GPL. Those six raster files are deleted from the distributable tree and replaced by an original, generic WNE vector icon. Do not recover or redistribute those historical files in releases. If repository history itself is publicly mirrored, the historical blobs remain a residual provenance/takedown risk; consider a coordinated history rewrite only after maintainer/legal review (not performed by this migration).
+The distributable includes raster launcher resources named `wechat_launcher_background.webp` and `wechat_launcher_foreground.webp`, plus adaptive-icon XML that presents those resources. These materials depict WeChat branding and are not project-owned. They are **not offered or relicensed under GPL-3.0-only**. WeChat/Tencent names, icons, artwork, and trademarks are owned by Tencent and/or their respective rights holders. They are included only to identify compatibility with WeChat. No license grant, authorization, affiliation, sponsorship, or endorsement by Tencent or any other rights holder is represented or implied.
+
+Users and redistributors are responsible for determining whether their intended use is permitted and for obtaining any required permission. The GPL-3.0-only license continues to govern the remainder of WNE's project code and other GPL-covered material; it does not create rights in the excluded launcher artwork or trademarks.
 
 Runtime notification avatars/icons obtained from an installed WeChat instance are user/device data used transiently through Android APIs; they are not checked into or distributed with WNE.
 
