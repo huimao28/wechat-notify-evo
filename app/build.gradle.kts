@@ -26,8 +26,8 @@ android {
         applicationId = "com.huimao.wechatnotifyevo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "1.0.20.1"
+        versionCode = 31
+        versionName = "1.1.0-beta.1"
     }
 
     signingConfigs {
@@ -85,6 +85,8 @@ dependencies {
     implementation("androidx.navigationevent:navigationevent-compose:1.2.0")
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
     ksp("androidx.room:room-compiler:2.8.5")
+    testImplementation("com.squareup.okhttp3:mockwebserver3:5.3.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
