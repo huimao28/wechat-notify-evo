@@ -16,8 +16,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -45,23 +48,26 @@ private fun AppContent(
 ) {
     val historyState by historyViewModel.state.collectAsStateWithLifecycle()
     val aiState by aiViewModel.state.collectAsStateWithLifecycle()
-    val backStack = remember { mutableStateListOf<AppRoute>(HomeRoute) }
+    // One snapshot write per navigation event: NavDisplay can never observe an empty stack.
+    val backStackSaver = remember { listSaver<List<AppRoute>, String>(
+        save = { stack -> stack.map(AppRouteSavePolicy::encode) },
+        restore = { saved -> saved.mapNotNull(AppRouteSavePolicy::decode).ifEmpty { listOf(HomeRoute) } },
+    ) }
+    var backStack by rememberSaveable(stateSaver = backStackSaver) { mutableStateOf<List<AppRoute>>(listOf(HomeRoute)) }
     val current = backStack.lastOrNull() ?: HomeRoute
     val selectedTab = TopLevelNavigationPolicy.tabFor(current)
 
     fun switchTab(tab: TopLevelTab) {
-        val next = TopLevelNavigationPolicy.switchStack(backStack, tab)
-        backStack.clear(); backStack.addAll(next)
+        backStack = TopLevelNavigationPolicy.switchStack(backStack, tab)
         historyViewModel.closeConversation()
     }
     fun openDetail(route: AppRoute) {
-        val next = TopLevelNavigationPolicy.openDetail(backStack, route)
-        backStack.clear(); backStack.addAll(next)
+        backStack = TopLevelNavigationPolicy.openDetail(backStack, route)
     }
     fun navigateBack() {
         if (backStack.size > 1) {
             if (backStack.last() is HistoryDetailRoute) historyViewModel.closeConversation()
-            backStack.removeLastOrNull()
+            backStack = TopLevelNavigationPolicy.navigateBack(backStack)
         }
     }
 
@@ -107,7 +113,10 @@ private fun AppContent(
                             HistoryPrivacySettingsCard(historyState, historyViewModel::setRecordingEnabled, historyViewModel::setRetention, historyViewModel::saveExcluded, historyViewModel::clearAll)
                         },
                         aiContent = {
-                            AiSettingsCard(aiState, aiViewModel::reloadConfig, aiViewModel::testConnection)
+                            AiSettingsCard(aiState, AiProviderActions(
+                                aiViewModel::saveProvider, aiViewModel::deleteProvider, aiViewModel::setDefaultProvider,
+                                aiViewModel::setProviderEnabled, aiViewModel::clearProviderKey, aiViewModel::testConnection,
+                            ))
                         },
                     )
                 }

@@ -30,6 +30,20 @@ enum class TopLevelTab(val route: AppRoute, val label: String) {
     ABOUT(AboutRoute, "关于"),
 }
 
+object AppRouteSavePolicy {
+    fun encode(route: AppRoute): String = when (route) {
+        HomeRoute -> "home"; HistoryRoute -> "history"; AiRoute -> "ai"
+        SettingsRouteKey -> "settings"; AboutRoute -> "about"; DiagnosticsRouteKey -> "diagnostics"
+        is HistoryDetailRoute -> "history-detail:${route.stableId}"
+    }
+    fun decode(value: String): AppRoute? = when {
+        value == "home" -> HomeRoute; value == "history" -> HistoryRoute; value == "ai" -> AiRoute
+        value == "settings" -> SettingsRouteKey; value == "about" -> AboutRoute; value == "diagnostics" -> DiagnosticsRouteKey
+        value.startsWith("history-detail:") -> HistoryDetailRoute(value.substringAfter("history-detail:"))
+        else -> null
+    }
+}
+
 object TopLevelNavigationPolicy {
     fun tabFor(route: AppRoute): TopLevelTab = when (route) {
         HomeRoute -> TopLevelTab.HOME
@@ -44,5 +58,9 @@ object TopLevelNavigationPolicy {
         if (current.size == 1 && current.firstOrNull() == tab.route) current else listOf(tab.route)
 
     fun openDetail(current: List<AppRoute>, detail: AppRoute): List<AppRoute> =
-        current.filterNot { it is HistoryDetailRoute || it == DiagnosticsRouteKey } + detail
+        (current.ifEmpty { listOf(HomeRoute) }.filterNot { it is HistoryDetailRoute || it == DiagnosticsRouteKey } + detail)
+            .ifEmpty { listOf(HomeRoute) }
+
+    fun navigateBack(current: List<AppRoute>): List<AppRoute> =
+        if (current.size > 1) current.dropLast(1) else current.ifEmpty { listOf(HomeRoute) }
 }
