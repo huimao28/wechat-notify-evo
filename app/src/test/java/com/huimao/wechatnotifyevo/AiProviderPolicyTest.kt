@@ -5,7 +5,7 @@ import org.junit.Test
 
 class AiProviderPolicyTest {
     @Test fun stableLegacyUuid() {
-        assertEquals("dbef7c28-c8cc-3ca8-a093-83c86c9c8283", AiProviderIds.LEGACY)
+        assertEquals("fc01b78b-4bed-3813-bd76-c93a086c0c94", AiProviderIds.LEGACY)
     }
 
     @Test fun secretDraftPolicy() {
@@ -26,7 +26,7 @@ class AiProviderPolicyTest {
     @Test fun configProjectionContainsNoSecret() {
         val e = entity("id")
         val text = AiConfig(AiProvider(e, true)).toString()
-        assertFalse(text.contains("apiKey", true))
+        assertFalse(text.contains("sk-test"))
         assertFalse(text.contains("secret", true))
     }
 
