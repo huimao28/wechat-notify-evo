@@ -1,6 +1,7 @@
 package com.huimao.wechatnotifyevo
 
 import android.app.Person
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.LocusId
@@ -12,6 +13,8 @@ import android.util.Log
 /** Publishes stable long-lived Android conversation shortcuts before notifications. */
 object ConversationShortcuts {
     private const val TAG = "WNE.Shortcuts"
+    private const val MATCH_OWN_SHORTCUTS = ShortcutManager.FLAG_MATCH_DYNAMIC or
+        ShortcutManager.FLAG_MATCH_CACHED or ShortcutManager.FLAG_MATCH_PINNED
 
     fun shortcutId(conv: Conversation): String = conv.conversationStableId.ifEmpty {
         // Defensive only; runtime assigns an HMAC id before publication. It deliberately
@@ -19,26 +22,85 @@ object ConversationShortcuts {
         "conv_pending_${conv.sourceUserId}_${conv.nid}"
     }
 
-    private fun targetIntent(context: Context, conv: Conversation): Intent? =
-        if (CurrentUserScope.accepts(conv) && conv.contentIntent != null) trampolineIntent(context, conv)
-        else null
+    private fun launcherComponent() = ComponentName(
+        ShortcutTargetCore.WECHAT_PACKAGE, ShortcutTargetCore.WECHAT_LAUNCHER_CLASS
+    )
 
-    private fun sameTarget(actual: Intent?, expected: Intent): Boolean = actual != null &&
-        actual.filterEquals(expected) &&
-        actual.getStringExtra("snapshot") == expected.getStringExtra("snapshot") &&
-        actual.getIntExtra(BubbleTrampolineActivity.EXTRA_NID, -1) ==
-            expected.getIntExtra(BubbleTrampolineActivity.EXTRA_NID, -1) &&
-        actual.getIntExtra(BubbleTrampolineActivity.EXTRA_SOURCE_USER_ID, -1) ==
-            expected.getIntExtra(BubbleTrampolineActivity.EXTRA_SOURCE_USER_ID, -1)
+    private fun launcherIsUsable(context: Context): Boolean {
+        val info = try { context.packageManager.getActivityInfo(launcherComponent(), 0) }
+        catch (_: Exception) { null } ?: return false
+        return ShortcutTargetCore.LauncherAccess(
+            info.exported, info.enabled, info.applicationInfo.enabled, info.permission
+        ).usable
+    }
+
+    /** Restores only from entries owned and returned by this app's ShortcutManager. */
+    private fun restoreLearnedMainUser(sm: ShortcutManager, conv: Conversation) {
+        if (conv.learnedMainUser != null || conv.conversationStableId.isBlank()) return
+        val own = try { sm.getShortcuts(MATCH_OWN_SHORTCUTS) } catch (_: RuntimeException) { return }
+        val records = own.map { shortcut ->
+            val intent = shortcut.intent
+            ShortcutTargetCore.OwnShortcut(
+                shortcut.id,
+                intent?.component?.packageName,
+                intent?.component?.className,
+                try { intent?.getStringExtra(ShortcutTargetCore.MAIN_USER_EXTRA) }
+                catch (_: RuntimeException) { null },
+            )
+        }
+        ShortcutTargetCore.restorableMainUser(shortcutId(conv), records)?.let {
+            conv.learnedMainUser = it
+            conv.autoLearningConsidered = true
+            conv.learningStatus = "已从本机系统 Shortcut 恢复直达会话"
+        }
+    }
+
+    private fun targetIntent(context: Context, conv: Conversation, sm: ShortcutManager? = null): Intent? {
+        if (!CurrentUserScope.accepts(conv) || conv.contentIntent == null) return null
+        val directEnabled = Prefs.isLauncherControlEnabled(context) && Prefs.isDirectChatEnabled(context)
+        if (directEnabled) sm?.let { restoreLearnedMainUser(it, conv) }
+        return if (ShortcutTargetCore.kind(
+                conv.learnedMainUser, directEnabled, launcherIsUsable(context)
+            ) == ShortcutTargetCore.Kind.DIRECT
+        ) directIntent(requireNotNull(conv.learnedMainUser)) else trampolineIntent(context, conv)
+    }
+
+    private fun directIntent(mainUser: String): Intent = Intent(Intent.ACTION_MAIN)
+        .setComponent(launcherComponent())
+        .addCategory(Intent.CATEGORY_LAUNCHER)
+        .putExtra(ShortcutTargetCore.MAIN_USER_EXTRA, mainUser)
+        .putExtra(ShortcutTargetCore.MULTI_TALKER_EXTRA, false)
+
+    private fun targetOf(intent: Intent?): ShortcutTargetCore.Target? = intent?.let {
+        ShortcutTargetCore.Target(
+            componentPackage = it.component?.packageName ?: return null,
+            componentClass = it.component?.className ?: return null,
+            action = it.action.orEmpty(),
+            categories = it.categories ?: emptySet(),
+            mainUser = try { it.getStringExtra(ShortcutTargetCore.MAIN_USER_EXTRA) }
+                catch (_: RuntimeException) { null },
+            introIsMultiTalker = if (it.hasExtra(ShortcutTargetCore.MULTI_TALKER_EXTRA)) {
+                try { it.getBooleanExtra(ShortcutTargetCore.MULTI_TALKER_EXTRA, true) }
+                catch (_: RuntimeException) { null }
+            } else null,
+            snapshot = try { it.getStringExtra("snapshot") } catch (_: RuntimeException) { null },
+            nid = if (it.hasExtra(BubbleTrampolineActivity.EXTRA_NID))
+                it.getIntExtra(BubbleTrampolineActivity.EXTRA_NID, -1) else null,
+            sourceUserId = if (it.hasExtra(BubbleTrampolineActivity.EXTRA_SOURCE_USER_ID))
+                it.getIntExtra(BubbleTrampolineActivity.EXTRA_SOURCE_USER_ID, -1) else null,
+        )
+    }
+
+    private fun sameTarget(actual: Intent?, expected: Intent): Boolean =
+        ShortcutTargetCore.sameTarget(targetOf(actual), requireNotNull(targetOf(expected)))
 
     fun isTargetPublished(context: Context, conv: Conversation): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
         return try {
-            val target = targetIntent(context, conv) ?: return false
-            context.getSystemService(ShortcutManager::class.java)?.getShortcuts(
-                ShortcutManager.FLAG_MATCH_DYNAMIC or ShortcutManager.FLAG_MATCH_CACHED or
-                    ShortcutManager.FLAG_MATCH_PINNED
-            )?.any { it.id == shortcutId(conv) && sameTarget(it.intent, target) } == true
+            val sm = context.getSystemService(ShortcutManager::class.java) ?: return false
+            val target = targetIntent(context, conv, sm) ?: return false
+            sm.getShortcuts(MATCH_OWN_SHORTCUTS)
+                .any { it.id == shortcutId(conv) && sameTarget(it.intent, target) }
         } catch (_: RuntimeException) { false }
     }
 
@@ -52,9 +114,8 @@ object ConversationShortcuts {
                 conv.shortcutPushed = false
                 return false
             }
-            val launch = targetIntent(context, conv) ?: return false
-            val already = sm.getShortcuts(ShortcutManager.FLAG_MATCH_DYNAMIC or
-                ShortcutManager.FLAG_MATCH_CACHED or ShortcutManager.FLAG_MATCH_PINNED)
+            val launch = targetIntent(context, conv, sm) ?: return false
+            val already = sm.getShortcuts(MATCH_OWN_SHORTCUTS)
                 .any { it.id == id && sameTarget(it.intent, launch) }
             if (already) {
                 conv.shortcutPushed = true

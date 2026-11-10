@@ -11,11 +11,13 @@ class AutoLearningPolicyTest {
         replaceSnapshot("key-$id", 1L, null)
     }
 
-    @Test fun disabledFirstEncounterIsNeverRetriedAfterOptIn() {
+    @Test fun disabledDoesNotConsumeButDoesNotRetryWhileDisabled() {
         val p = AutoLearningPolicy()
         val c = conversation()
         assertFalse(p.admit(c, false, false, 0))
-        assertFalse(p.admit(c, true, false, 60_000))
+        assertFalse(c.autoLearningConsidered)
+        assertFalse(p.admit(c, false, false, 60_000))
+        assertTrue(p.admit(c, true, false, 60_000))
     }
     @Test fun subsequentMessagesNeverRepeatAnAttempt() {
         val p = AutoLearningPolicy()
@@ -24,19 +26,21 @@ class AutoLearningPolicyTest {
         c.replaceSnapshot("key-1", 2L, null)
         assertFalse(p.admit(c, true, false, 3_600_000))
     }
-    @Test fun busyFirstEncounterIsConsumedWithoutQueue() {
+    @Test fun busyDoesNotConsumeAndLaterNotificationCanRetry() {
         val p = AutoLearningPolicy()
         val c = conversation()
         assertFalse(p.admit(c, true, true, 0))
-        assertFalse(p.admit(c, true, false, 60_000))
+        assertFalse(c.autoLearningConsidered)
+        assertTrue(p.admit(c, true, false, 60_000))
     }
-    @Test fun minuteLimitDoesNotQueueSkippedConversation() {
+    @Test fun minuteLimitDoesNotConsumeSkippedConversation() {
         val p = AutoLearningPolicy()
         assertTrue(p.admit(conversation(1), true, false, 0))
         val skipped = conversation(2)
         assertFalse(p.admit(skipped, true, false, 59_999))
-        assertFalse(p.admit(skipped, true, false, 60_000))
-        assertTrue(p.admit(conversation(3), true, false, 60_000))
+        assertFalse(skipped.autoLearningConsidered)
+        assertTrue(p.admit(skipped, true, false, 60_000))
+        assertFalse(p.admit(conversation(3), true, false, 60_000))
     }
     @Test fun sixPerRollingHourAndNoBurstAtExpiry() {
         val p = AutoLearningPolicy()
@@ -44,6 +48,21 @@ class AutoLearningPolicyTest {
         assertFalse(p.admit(conversation(6), true, false, 360_000))
         assertTrue(p.admit(conversation(7), true, false, 3_600_000))
         assertFalse(p.admit(conversation(8), true, false, 3_600_001))
+    }
+    @Test fun failedAttemptCanRetryButSuccessfulAttemptCannot() {
+        val p = AutoLearningPolicy()
+        val failed = conversation(20)
+        assertTrue(p.admit(failed, true, false, 0))
+        p.failed(failed)
+        assertFalse(failed.autoLearningConsidered)
+        assertTrue(p.admit(failed, true, false, 60_000))
+
+        val success = conversation(21)
+        assertTrue(p.admit(success, true, false, 120_000))
+        success.learnedMainUser = "synthetic"
+        p.failed(success)
+        assertTrue(success.autoLearningConsidered)
+        assertFalse(p.admit(success, true, false, 180_000))
     }
     @Test fun alreadyLearnedConversationIsNotSent() {
         val c = conversation().apply { learnedMainUser = "synthetic" }

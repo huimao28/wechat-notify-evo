@@ -16,6 +16,11 @@ object ManualConversationLearning {
     private val requests = LearningRequestGate()
     private val automatic = AutoLearningPolicy()
 
+    private fun automaticFailed(conv: Conversation, stage: DiagnosticStage) {
+        automatic.failed(conv)
+        InMemoryDiagnostics.record(conv.sourceUserId, stage)
+    }
+
     fun cancelPending() {
         requests.cancel()
         busy = false
@@ -27,10 +32,23 @@ object ManualConversationLearning {
             InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_SKIP)
             return
         }
-        if (!automatic.admit(conv, Prefs.isAutoLearningEnabled(context), busy,
+        when (automatic.decide(conv, Prefs.isAutoLearningEnabled(context), busy,
                 android.os.SystemClock.elapsedRealtime())) {
-            InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_SKIP)
-            return
+            AutoLearningDecision.ADMITTED -> Unit
+            AutoLearningDecision.BUSY -> {
+                status = "自动学习忙碌：保留到下一条新通知重试"
+                InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_BUSY)
+                return
+            }
+            AutoLearningDecision.RATE_LIMITED -> {
+                status = "自动学习限频：保留到下一条新通知重试"
+                InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_RATE_LIMITED)
+                return
+            }
+            else -> {
+                InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_SKIP)
+                return
+            }
         }
         InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_STARTED)
         learn(context, conv, conv.snapshotToken, auto = true)
@@ -40,19 +58,30 @@ object ManualConversationLearning {
     fun learn(activity: Context, conv: Conversation, token: String, auto: Boolean = false) {
         if (!CurrentUserScope.accepts(conv)) {
             status = "仅允许学习应用所在用户空间的主微信通知"
+            if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_RESULT)
             return
         }
-        if (auto && !Prefs.isAutoLearningEnabled(activity)) return
+        if (auto && !Prefs.isAutoLearningEnabled(activity)) {
+            automatic.failed(conv)
+            return
+        }
         val pi = conv.contentIntent
         val key = conv.notificationKey
-        if (busy) return
+        if (busy) {
+            if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_BUSY)
+            return
+        }
         if (pi == null || !conv.isCurrentSnapshot(token, key, pi) ||
             pi.creatorPackage != WeChatListenerService.WECHAT_PACKAGE ||
             !CurrentUserScope.accepts(conv.sourceUserId, pi)) {
-            status = "通知已变化或入口不可用；请等待新通知并重新选择"
+            status = "通知已变化或入口不可用；下一条新通知可重试"
+            if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_RESULT)
             return
         }
-        val id = requests.begin() ?: return
+        val id = requests.begin() ?: run {
+            if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_BUSY)
+            return
+        }
         val handler = Handler(Looper.getMainLooper())
         busy = true
         status = "已请求打开微信，等待当前会话回调（不代表直达成功）"
@@ -60,7 +89,9 @@ object ManualConversationLearning {
             if (requests.finish(id)) {
                 busy = false
                 requests.cancel() // Reject late callbacks, not just their UI updates.
-                status = "5 秒内未收到回调；本次已失效，可重新手动学习"
+                status = if (auto) "自动学习超时；下一条新通知可重试" else
+                    "5 秒内未收到回调；本次已失效，可重新手动学习"
+                if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_TIMEOUT)
             }
         }
         handler.postDelayed(timeout, 5_000)
@@ -71,14 +102,17 @@ object ManualConversationLearning {
                     handler.removeCallbacks(timeout)
                     if ((auto && (!Prefs.isAutoLearningEnabled(activity) || !Prefs.isEnabled(activity))) ||
                         !conv.isCurrentSnapshot(token, key, pi) || returnedPi != pi) {
-                        status = "回调对应的通知已失效；未绑定，请等待新通知后重新学习"
+                        status = "回调对应的通知已失效；下一条新通知可重试"
+                        if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_RESULT)
                     } else {
                         val user = try {
                             @Suppress("DEPRECATION")
                             (intent?.extras?.get("Main_User") as? String)?.takeIf { it.isNotEmpty() }
                         } catch (_: RuntimeException) { null }
                         if (user == null) {
-                            status = "回调未提供非空 String Main_User；未绑定"
+                            status = if (auto) "自动学习回调缺少会话标识；下一条新通知可重试" else
+                                "回调未提供非空 String Main_User；未绑定"
+                            if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_MISSING_MAIN_USER)
                         } else {
                             val supersededId = conv.conversationStableId
                             conv.learnedMainUser = user
@@ -103,17 +137,19 @@ object ManualConversationLearning {
                                     WeChatListenerService.repostConversation(activity, conv, silent = true)
                                 }
                                 status = conv.learningStatus
+                                InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_SUCCESS)
                             }
                         }
                     }
-                    if (auto) InMemoryDiagnostics.record(conv.sourceUserId, DiagnosticStage.AUTO_LEARN_RESULT)
                 }
             }, handler)
         } catch (_: Exception) {
             handler.removeCallbacks(timeout)
             busy = false
             requests.cancel()
-            status = "原通知入口发送失败或已取消；未绑定，请等待新通知"
+            status = if (auto) "自动学习发送失败；下一条新通知可重试" else
+                "原通知入口发送失败或已取消；未绑定，请等待新通知"
+            if (auto) automaticFailed(conv, DiagnosticStage.AUTO_LEARN_SEND_FAILED)
         }
     }
 
