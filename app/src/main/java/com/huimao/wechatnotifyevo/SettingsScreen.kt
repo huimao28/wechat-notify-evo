@@ -102,7 +102,11 @@ private data class SettingsActions(
 )
 
 @Composable
-fun SettingsRoute(onOpenAbout: () -> Unit, onOpenDiagnostics: () -> Unit) {
+fun SettingsRoute(
+    onOpenAbout: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+    privacyContent: @Composable () -> Unit = {},
+) {
     val context = LocalContext.current
     var listenerGranted by remember { mutableStateOf(false) }
     var postGranted by remember { mutableStateOf(false) }
@@ -262,6 +266,7 @@ fun SettingsRoute(onOpenAbout: () -> Unit, onOpenDiagnostics: () -> Unit) {
         },
         onOpenAbout = onOpenAbout,
         onOpenDiagnostics = onOpenDiagnostics,
+        privacyContent = privacyContent,
     )
 
     if (confirmDirectChat) DirectChatRiskDialog(
@@ -306,6 +311,7 @@ private fun SettingsScreen(
     onShowLearningChoices: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    privacyContent: @Composable () -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("微信通知进化") }) },
@@ -327,6 +333,7 @@ private fun SettingsScreen(
             item(span = { GridItemSpan(maxLineSpan) }) { IntroCard() }
             item { PermissionsSection(state, actions) }
             item { CoreSection(state, actions) }
+            item { privacyContent() }
             item { KeepAliveSection(state, actions) }
             item { DirectChatSection(state, actions) }
             item { AppearanceSection(state, actions, onShowIconDialog) }
@@ -736,6 +743,6 @@ private val previewState = SettingsUiState(
 @Composable
 private fun SettingsScreenPreview() {
     WeChatNotifyEvoTheme(dynamicColor = false) {
-        SettingsScreen(previewState, SettingsActions(), {}, {}, {}, {})
+        SettingsScreen(previewState, SettingsActions(), {}, {}, {}, {}, {})
     }
 }
