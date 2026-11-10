@@ -5,6 +5,12 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val generatedLegalAssets = layout.buildDirectory.dir("generated/legalAssets")
+val syncLegalNotices by tasks.registering(Copy::class) {
+    from(rootProject.file("LICENSE"), rootProject.file("NOTICE"), rootProject.file("THIRD_PARTY_NOTICES.md"))
+    into(generatedLegalAssets.map { it.dir("legal") })
+}
+
 // Release signing comes from CI secrets (see .github/workflows/release.yml).
 // Unset outside CI: debug builds are unaffected, release builds fail loudly.
 val releaseKeystoreFile = System.getenv("KEYSTORE_FILE")?.let { file(it) }
@@ -26,8 +32,8 @@ android {
         applicationId = "com.huimao.wechatnotifyevo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 32
-        versionName = "1.1.0-beta.2"
+        versionCode = 33
+        versionName = "1.1.0-beta.3"
     }
 
     signingConfigs {
@@ -59,6 +65,12 @@ android {
     buildFeatures {
         compose = true
     }
+
+    sourceSets["main"].assets.srcDir(generatedLegalAssets)
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(syncLegalNotices)
 }
 
 ksp {

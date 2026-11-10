@@ -24,7 +24,8 @@
     <string name="about_project_url">https://github.com/huimao28/wechat-notify-evo</string>
     <string name="about_project_summary">在浏览器中查看项目仓库</string>
     <string name="about_license_title">开源许可</string>
-    <string name="about_license_missing">当前仓库未提供 LICENSE 文件，暂无可跳转的项目许可文本。</string>
+    <string name="about_license_summary">GNU GPL v3.0 only（GPL-3.0-only）。点击查看完整许可文本；对应源码与第三方声明可从上方项目地址获取。</string>
+    <string name="about_license_url">https://github.com/huimao28/wechat-notify-evo/blob/main/LICENSE</string>
     <string name="about_acknowledgements_title">致谢</string>
     <string name="about_acknowledgement_nevolution">感谢 Oasis Feng 开发 Nevolution（“女娲石·通知进化”），以及由此推动的通知进化理念与生态；也感谢 Nevolution 官方微信通知进化实现/插件带来的探索与启发。</string>
     <string name="about_acknowledgement_qq">感谢 ichenhe 的 QQ-Notify-Evolution（企鹅通知进化）项目带来的开源参考。</string>

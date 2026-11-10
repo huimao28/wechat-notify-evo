@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 
 data class AiUiState(
     val config: AiConfig = AiConfig(),
+    val providers: List<AiProvider> = emptyList(),
+    val selectedProviderId: String? = null,
     val phase: AiPhase = AiPhase.Idle,
     val range: AiRange = AiRange.TODAY,
     val conversations: List<ConversationHistorySummary> = emptyList(),
@@ -32,9 +34,11 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     init { reloadConfig(); loadConversations() }
 
     fun reloadConfig() {
-        val config = AiConfigStore.load(app, secrets)
+        val providerConfig = AiProviderStore.load(app, secrets)
+        val selected = providerConfig.selected(mutableState.value.selectedProviderId)
+        val config = selected?.let(::AiConfig) ?: AiConfig()
         mutableState.update { old ->
-            old.copy(config = config, phase = when {
+            old.copy(config = config, providers = providerConfig.providers, selectedProviderId = selected?.id, phase = when {
                 !config.configured -> AiPhase.ConfigMissing
                 old.selectedIds.isEmpty() -> AiPhase.Selecting
                 else -> old.phase
@@ -47,6 +51,12 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         AiConfigStore.save(app, endpoint, model, optional, secrets)
             .onSuccess { config -> mutableState.update { it.copy(config = config, phase = if (it.selectedIds.isEmpty()) AiPhase.Selecting else it.phase, testStatus = "配置已保存") } }
             .onFailure { error -> mutableState.update { it.copy(testStatus = error.message ?: "配置无效") } }
+    }
+
+
+    fun selectProvider(id: String) {
+        val p = AiProviderStore.load(app, secrets).selected(id) ?: return
+        mutableState.update { it.copy(config = AiConfig(p), selectedProviderId = p.id, phase = if (it.selectedIds.isEmpty()) AiPhase.Selecting else it.phase) }
     }
 
     fun setRange(range: AiRange) {
@@ -92,7 +102,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     fun generate() {
         val state = mutableState.value
         if (state.phase !is AiPhase.Confirming || !state.config.configured) return
-        val key = secrets.get() ?: run { mutableState.update { it.copy(phase = AiPhase.ConfigMissing) }; return }
+        val key = secrets.get(state.config.providerId) ?: run { mutableState.update { it.copy(phase = AiPhase.ConfigMissing) }; return }
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
             mutableState.update { it.copy(phase = AiPhase.Running) }
@@ -111,7 +121,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     fun testConnection() {
         val state = mutableState.value
         if (!state.config.configured) return
-        val key = secrets.get() ?: return reloadConfig()
+        val key = secrets.get(state.config.providerId) ?: return reloadConfig()
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
             mutableState.update { it.copy(testStatus = "测试中…") }

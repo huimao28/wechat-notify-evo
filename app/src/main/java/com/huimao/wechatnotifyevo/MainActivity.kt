@@ -94,7 +94,7 @@ private fun AppContent(
                 }
                 entry<AiRoute> {
                     AiSummaryScreen(aiState, AiScreenActions(
-                        aiViewModel::setRange, aiViewModel::toggleConversation, aiViewModel::preview,
+                        aiViewModel::setRange, aiViewModel::selectProvider, aiViewModel::toggleConversation, aiViewModel::preview,
                         aiViewModel::requestConfirmation, aiViewModel::dismissConfirmation,
                         aiViewModel::generate, aiViewModel::cancel, aiViewModel::retry, aiViewModel::onLeave,
                     ))
@@ -107,7 +107,7 @@ private fun AppContent(
                             HistoryPrivacySettingsCard(historyState, historyViewModel::setRecordingEnabled, historyViewModel::setRetention, historyViewModel::saveExcluded, historyViewModel::clearAll)
                         },
                         aiContent = {
-                            AiSettingsCard(aiState, aiViewModel::saveConfig, aiViewModel::testConnection)
+                            AiSettingsCard(aiState, aiViewModel::reloadConfig, aiViewModel::testConnection)
                         },
                     )
                 }

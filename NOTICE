@@ -1,0 +1,27 @@
+WeChat Notify Evolution (WNE)
+Copyright (C) 2025-2026 huimao28 and WeChat Notify Evolution contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 only (GPL-3.0-only).
+
+The complete license is in LICENSE. Source code is available at:
+https://github.com/huimao28/wechat-notify-evo
+
+Individual contributions remain copyrighted by their respective authors.
+Git history identifies Kobby Li / huimao28 and commits authored as "Minis"
+<minis@localhost>. The latter identity appears to be an automation/tool identity;
+it is not evidence of a separate copyright assignment. No assignment is claimed.
+See THIRD_PARTY_NOTICES.md for dependencies, references, and excluded material.
+
+The WNE launcher artwork distributed by this repository is an original generic
+WNE vector design. It is not the WeChat launcher icon. Tencent/WeChat names and
+marks belong to their respective owners; no affiliation or endorsement is implied.
+
+OpenMinis notice reserved for future ports
+-------------------------------------------
+Copyright (C) OpenMinis contributors, where applicable.
+No OpenMinis code is presently identified as copied or ported into this repository.
+This reservation does not claim that any unported OpenMinis code is part of WNE.
+If OpenMinis code is ported later, the importing commit must preserve its exact
+upstream copyright/license notices and record provenance in THIRD_PARTY_NOTICES.md.

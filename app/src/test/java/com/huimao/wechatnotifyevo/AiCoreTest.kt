@@ -65,8 +65,8 @@ class AiCoreTest {
 
     private class FakeSecretStore : AiSecretStore {
         private var secret: CharArray? = null
-        override fun put(secret: CharArray) { this.secret = secret.copyOf(); secret.fill('\u0000') }
-        override fun get() = secret?.copyOf()
-        override fun clear() { secret?.fill('\u0000'); secret = null }
+        override fun put(providerId: String, secret: CharArray) { this.secret = secret.copyOf(); secret.fill('\u0000') }
+        override fun get(providerId: String) = secret?.copyOf()
+        override fun clear(providerId: String) { secret?.fill('\u0000'); secret = null }
     }
 }
