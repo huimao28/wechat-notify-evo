@@ -3,11 +3,13 @@ package com.huimao.wechatnotifyevo
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class AiUiState(
     val config: AiConfig = AiConfig(),
@@ -20,6 +22,9 @@ data class AiUiState(
     val prepared: AiPreparedPayload = AiPreparedPayload(emptyList(), "", 0, 0),
     val loading: Boolean = false,
     val testStatus: String? = null,
+    val providerOperationRunning: Boolean = false,
+    val providerOperationMessage: String? = null,
+    val providerOperationError: Boolean = false,
 )
 
 class AiViewModel(application: Application) : AndroidViewModel(application) {
@@ -33,30 +38,69 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     init { reloadConfig(); loadConversations() }
 
-    fun reloadConfig() {
-        val providerConfig = AiProviderStore.load(app, secrets)
-        val selected = providerConfig.selected(mutableState.value.selectedProviderId)
-        val config = selected?.let(::AiConfig) ?: AiConfig()
-        mutableState.update { old ->
-            old.copy(config = config, providers = providerConfig.providers, selectedProviderId = selected?.id, phase = when {
-                !config.configured -> AiPhase.ConfigMissing
-                old.selectedIds.isEmpty() -> AiPhase.Selecting
-                else -> old.phase
-            })
+    fun reloadConfig() = providerRead { AiProviderStore.load(app, secrets) }
+
+    fun saveProvider(entity: AiProviderEntity, apiKey: CharArray, makeDefault: Boolean) {
+        val ownedKey = apiKey.copyOf()
+        apiKey.fill('\u0000')
+        providerWrite("Provider 已保存") {
+            try { AiProviderStore.save(app, entity, ownedKey.takeIf { it.isNotEmpty() }, makeDefault = makeDefault, s = secrets).getOrThrow() }
+            finally { ownedKey.fill('\u0000') }
         }
     }
 
-    fun saveConfig(endpoint: String, model: String, apiKey: CharArray) {
-        val optional = apiKey.takeIf { it.isNotEmpty() }
-        AiConfigStore.save(app, endpoint, model, optional, secrets)
-            .onSuccess { config -> mutableState.update { it.copy(config = config, phase = if (it.selectedIds.isEmpty()) AiPhase.Selecting else it.phase, testStatus = "配置已保存") } }
-            .onFailure { error -> mutableState.update { it.copy(testStatus = error.message ?: "配置无效") } }
+    fun deleteProvider(id: String) = providerWrite("Provider 已删除") { AiProviderStore.delete(app, id, secrets) }
+    fun setDefaultProvider(id: String) = providerWrite("默认 Provider 已更新") { AiProviderStore.setDefault(app, id, secrets) }
+    fun setProviderEnabled(id: String, enabled: Boolean) = providerWrite(if (enabled) "Provider 已启用" else "Provider 已停用") { AiProviderStore.setEnabled(app, id, enabled, secrets) }
+    fun clearProviderKey(id: String) = providerWrite("API Key 已清除") {
+        val provider = AiProviderStore.load(app, secrets).providers.firstOrNull { it.id == id } ?: error("Provider 不存在")
+        AiProviderStore.save(app, provider.entity, null, clearKey = true, s = secrets).getOrThrow()
     }
 
+    private fun providerRead(block: () -> AiProviderConfig) {
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { block() } }
+                .onSuccess(::applyProviderConfig)
+                .onFailure { mutableState.update { it.copy(providerOperationMessage = "无法读取 Provider 配置", providerOperationError = true) } }
+        }
+    }
+
+    private fun providerWrite(success: String, block: () -> AiProviderConfig) {
+        if (mutableState.value.providerOperationRunning) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(providerOperationRunning = true, providerOperationMessage = null, providerOperationError = false) }
+            runCatching { withContext(Dispatchers.IO) { block() } }
+                .onSuccess { config -> applyProviderConfig(config, success) }
+                .onFailure { error -> mutableState.update { it.copy(providerOperationRunning = false, providerOperationMessage = ProviderOperationPolicy.safeFailureMessage(error), providerOperationError = true) } }
+        }
+    }
+
+    private fun applyProviderConfig(providerConfig: AiProviderConfig, message: String? = null) {
+        val selected = providerConfig.selected(mutableState.value.selectedProviderId)
+        val config = selected?.let(::AiConfig) ?: AiConfig()
+        mutableState.update { old -> old.copy(
+            config = config, providers = providerConfig.providers, selectedProviderId = selected?.id,
+            providerOperationRunning = false, providerOperationMessage = message, providerOperationError = false,
+            phase = when { !config.configured -> AiPhase.ConfigMissing; old.selectedIds.isEmpty() -> AiPhase.Selecting; else -> old.phase },
+        ) }
+    }
+
+    fun saveConfig(endpoint: String, model: String, apiKey: CharArray) {
+        val ownedKey = apiKey.copyOf(); apiKey.fill('\u0000')
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { AiConfigStore.save(app, endpoint, model, ownedKey.takeIf { it.isNotEmpty() }, secrets) }
+                result.onSuccess { config -> mutableState.update { it.copy(config = config, phase = if (it.selectedIds.isEmpty()) AiPhase.Selecting else it.phase, testStatus = "配置已保存") } }
+                    .onFailure { mutableState.update { it.copy(testStatus = "配置无效") } }
+            } finally { ownedKey.fill('\u0000') }
+        }
+    }
 
     fun selectProvider(id: String) {
-        val p = AiProviderStore.load(app, secrets).selected(id) ?: return
-        mutableState.update { it.copy(config = AiConfig(p), selectedProviderId = p.id, phase = if (it.selectedIds.isEmpty()) AiPhase.Selecting else it.phase) }
+        viewModelScope.launch {
+            val p = withContext(Dispatchers.IO) { AiProviderStore.load(app, secrets).selected(id) } ?: return@launch
+            mutableState.update { it.copy(config = AiConfig(p), selectedProviderId = p.id, phase = if (it.selectedIds.isEmpty()) AiPhase.Selecting else it.phase) }
+        }
     }
 
     fun setRange(range: AiRange) {
@@ -121,14 +165,16 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     fun testConnection() {
         val state = mutableState.value
         if (!state.config.configured) return
-        val key = secrets.get(state.config.providerId) ?: return reloadConfig()
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
             mutableState.update { it.copy(testStatus = "测试中…") }
+            val key = withContext(Dispatchers.IO) { secrets.get(state.config.providerId) }
+                ?: run { mutableState.update { it.copy(testStatus = "连接失败：未配置 Key") }; return@launch }
             try {
                 client.complete(state.config, key, "这是连接测试，不含聊天内容。请只回复 OK。")
                 mutableState.update { it.copy(testStatus = "连接成功（响应正文未保存）") }
             } catch (_: Throwable) { mutableState.update { it.copy(testStatus = "连接失败") } }
+            finally { key.fill('\u0000') }
         }
     }
 

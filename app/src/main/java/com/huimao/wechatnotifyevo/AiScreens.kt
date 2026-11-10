@@ -158,9 +158,17 @@ data class AiScreenActions(
     }
 }
 
+data class AiProviderActions(
+    val save: (AiProviderEntity, CharArray, Boolean) -> Unit,
+    val delete: (String) -> Unit,
+    val setDefault: (String) -> Unit,
+    val setEnabled: (String, Boolean) -> Unit,
+    val clearKey: (String) -> Unit,
+    val test: () -> Unit,
+)
+
 @Composable
-fun AiSettingsCard(state: AiUiState, reload: () -> Unit, requestTest: () -> Unit) {
-    val context = LocalContext.current
+fun AiSettingsCard(state: AiUiState, actions: AiProviderActions) {
     val editorSaver = remember { mapSaver(
         save = { value: ProviderEditorState -> mapOf(
             "mode" to when (value.mode) {
@@ -202,17 +210,15 @@ fun AiSettingsCard(state: AiUiState, reload: () -> Unit, requestTest: () -> Unit
         )).copy(displayName = editor.name, endpoint = editor.endpoint, modelId = editor.model)
     }
     fun save(makeDefault: Boolean) {
-        val entity = entityFromDraft()
-        AiProviderStore.save(context, entity, key.toCharArray(), makeDefault = makeDefault).onSuccess { config ->
-            val saved = config.providers.firstOrNull { it.id == entity.id }
-            if (saved != null) openEdit(saved) else closeEditor()
-            reload()
-        }
+        val submitted = key.toCharArray()
+        key = "" // Never retain a submitted credential in Compose state.
+        reveal = false
+        actions.save(entityFromDraft(), submitted, makeDefault)
     }
 
-    if (clearConfirm) AlertDialog(onDismissRequest = { clearConfirm = false }, title = { Text("清除 API Key？") }, text = { Text("清除后该 Provider 无法请求，且不能恢复。") }, confirmButton = { Button(onClick = { selected?.let { AiProviderStore.save(context, it.entity, null, clearKey = true) }; clearConfirm = false; reload() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("确认清除") } }, dismissButton = { TextButton(onClick = { clearConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") } })
-    if (deleteConfirm) AlertDialog(onDismissRequest = { deleteConfirm = false }, title = { Text("删除 Provider？") }, text = { Text("将删除普通配置和对应密钥；默认 Provider 会回退到首个已启用项。") }, confirmButton = { Button(onClick = { editor.editingId?.let { AiProviderStore.delete(context, it) }; deleteConfirm = false; closeEditor(); reload() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("删除") } }, dismissButton = { TextButton(onClick = { deleteConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") } })
-    if (testConfirm) AlertDialog(onDismissRequest = { testConfirm = false }, title = { Text("测试连接？") }, text = { Text("仅测试当前已保存 Provider，并发送固定 ping；不会发送聊天内容。Key 留空会保留已保存值。") }, confirmButton = { Button(onClick = { testConfirm = false; requestTest() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("确认测试") } }, dismissButton = { TextButton(onClick = { testConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") } })
+    if (clearConfirm) AlertDialog(onDismissRequest = { clearConfirm = false }, title = { Text("清除 API Key？") }, text = { Text("清除后该 Provider 无法请求，且不能恢复。") }, confirmButton = { Button(onClick = { selected?.let { actions.clearKey(it.id) }; clearConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("确认清除") } }, dismissButton = { TextButton(onClick = { clearConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") } })
+    if (deleteConfirm) AlertDialog(onDismissRequest = { deleteConfirm = false }, title = { Text("删除 Provider？") }, text = { Text("将删除普通配置和对应密钥；默认 Provider 会回退到首个已启用项。") }, confirmButton = { Button(onClick = { editor.editingId?.let(actions.delete); deleteConfirm = false; closeEditor() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("删除") } }, dismissButton = { TextButton(onClick = { deleteConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") } })
+    if (testConfirm) AlertDialog(onDismissRequest = { testConfirm = false }, title = { Text("测试连接？") }, text = { Text("仅测试当前已保存 Provider，并发送固定 ping；不会发送聊天内容。Key 留空会保留已保存值。") }, confirmButton = { Button(onClick = { testConfirm = false; actions.test() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("确认测试") } }, dismissButton = { TextButton(onClick = { testConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") } })
 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -238,24 +244,26 @@ fun AiSettingsCard(state: AiUiState, reload: () -> Unit, requestTest: () -> Unit
                 OutlinedTextField(key, { key = it }, label = { Text(if (selected?.hasApiKey == true) "API Key（留空保留）" else "API Key") }, visualTransformation = if (reveal) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                 TextButton(onClick = { reveal = !reveal }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = if (reveal) "隐藏 API Key" else "显示 API Key 输入" }) { Text(if (reveal) "隐藏 Key" else "显示输入") }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Button(onClick = { save(false) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存") }
-                    Button(onClick = { save(true) }, enabled = editor.canSaveAsDefault, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存并默认") }
+                    Button(onClick = { save(false) }, enabled = !state.providerOperationRunning, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存") }
+                    Button(onClick = { save(true) }, enabled = editor.canSaveAsDefault && !state.providerOperationRunning, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存并默认") }
                     OutlinedButton(onClick = ::closeEditor, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "取消编辑 Provider 并清空草稿" }) { Text("取消") }
                 }
                 if (selected != null) {
                     Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        TextButton(onClick = { AiProviderStore.setEnabled(context, selected.id, !selected.enabled); reload() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (selected.enabled) "停用" else "启用") }
-                        TextButton(onClick = { AiProviderStore.setDefault(context, selected.id); reload() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("设为默认") }
+                        TextButton(onClick = { actions.setEnabled(selected.id, !selected.enabled) }, enabled = !state.providerOperationRunning, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (selected.enabled) "停用" else "启用") }
+                        TextButton(onClick = { actions.setDefault(selected.id) }, enabled = !state.providerOperationRunning, modifier = Modifier.heightIn(min = 48.dp)) { Text("设为默认") }
                         TextButton(onClick = { clearConfirm = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("清除 Key") }
                         TextButton(onClick = { deleteConfirm = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("删除") }
                     }
                 }
                 val isCreate = editor.mode is ProviderEditorMode.Create
-                OutlinedButton(onClick = { testConfirm = true }, enabled = !isCreate, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = if (isCreate) "保存 Provider 后测试连接" else "测试已保存 Provider 连接" }) {
+                OutlinedButton(onClick = { testConfirm = true }, enabled = !isCreate && !state.providerOperationRunning, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = if (isCreate) "保存 Provider 后测试连接" else "测试已保存 Provider 连接" }) {
                     Text(if (isCreate) "保存后测试" else "测试连接（固定 ping）")
                 }
             }
             Text("API Key 由 Android Keystore AES-GCM 按 Provider 隔离；不进入 Room、SavedState、日志或备份。", style = MaterialTheme.typography.bodySmall)
+            if (state.providerOperationRunning) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { CircularProgressIndicator(); Text("正在保存 Provider…") }
+            state.providerOperationMessage?.let { Text(it, color = if (state.providerOperationError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
             state.testStatus?.let { Text(it) }
         }
     }

@@ -44,7 +44,7 @@ data class AiProvider(val entity:AiProviderEntity,val hasApiKey:Boolean){
 }
 @Database(entities=[AiProviderEntity::class,AiSettingsEntity::class],version=1,exportSchema=true)
 @TypeConverters(AiProviderConverters::class) abstract class AiProviderDatabase:RoomDatabase(){ abstract fun dao():AiProviderDao
- companion object{@Volatile private var db:AiProviderDatabase?=null; fun get(c:Context)=db?:synchronized(this){db?:Room.databaseBuilder(c.applicationContext,AiProviderDatabase::class.java,"ai_providers_v1.db").allowMainThreadQueries().build().also{db=it}}}}
+ companion object{@Volatile private var db:AiProviderDatabase?=null; fun get(c:Context)=db?:synchronized(this){db?:Room.databaseBuilder(c.applicationContext,AiProviderDatabase::class.java,"ai_providers_v1.db").build().also{db=it}}}}
 class AiProviderConverters{@TypeConverter fun kind(v:AiProviderKind)=v.name;@TypeConverter fun kind(v:String)=AiProviderKind.valueOf(v)}
 object AiProviderIds{ val LEGACY:String=UUID.nameUUIDFromBytes("wechat-notify-evo:legacy-ai-provider:v1".toByteArray(StandardCharsets.UTF_8)).toString() }
 

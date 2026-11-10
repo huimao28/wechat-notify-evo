@@ -18,6 +18,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 enum class SecretUpdate{KEEP,REPLACE,CLEAR}
+object ProviderOperationPolicy {
+ fun safeFailureMessage(@Suppress("UNUSED_PARAMETER") error: Throwable) = "操作失败，请检查配置后重试"
+}
 object AiSecretPolicy{fun action(value:CharArray?,clear:Boolean)=when{clear->SecretUpdate.CLEAR;value == null || value.isEmpty()->SecretUpdate.KEEP;else->SecretUpdate.REPLACE}}
 interface AiSecretStore{
  fun put(providerId:String,secret:CharArray);fun get(providerId:String):CharArray?;fun clear(providerId:String)
