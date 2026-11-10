@@ -14,9 +14,17 @@ Git history identifies Kobby Li / huimao28 and commits authored as "Minis"
 it is not evidence of a separate copyright assignment. No assignment is claimed.
 See THIRD_PARTY_NOTICES.md for dependencies, references, and excluded material.
 
-The WNE launcher artwork distributed by this repository is an original generic
-WNE vector design. It is not the WeChat launcher icon. Tencent/WeChat names and
-marks belong to their respective owners; no affiliation or endorsement is implied.
+Launcher icon exception
+-----------------------
+The bundled `wechat_launcher_foreground.webp` and
+`wechat_launcher_background.webp` launcher artwork, together with its adaptive
+icon presentation, depicts WeChat branding. It is not licensed under GPL-3.0-only
+and is not project-owned. WeChat/Tencent names, icons, and trademarks are owned
+by Tencent and/or their respective rights holders. The material is included only
+for compatibility identification; no authorization, affiliation, or endorsement
+is claimed. Recipients must assess and obtain any permissions required for their
+use or redistribution. The GPL terms continue to apply to the remainder of the
+project without expanding to these excluded trademark/artwork assets.
 
 OpenMinis notice reserved for future ports
 -------------------------------------------

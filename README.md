@@ -104,6 +104,11 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。
 
+## v1.1.0-beta.4 Pre-release：恢复原应用图标
+
+- 这是 beta.3 的图标修正版，包含 beta.3 全部功能；仅将 launcher 图标与 adaptive icon 引用恢复为 beta.2 版本，不改通知 `smallIcon` 或运行时圆形头像逻辑。
+- 恢复的微信图标/商标素材不按 GPL 授权，权利归腾讯和/或相关权利人，仅用于兼容识别；不声称获得授权、关联或认可。项目其余代码与 GPL 覆盖材料仍为 GPL-3.0-only，详见 `NOTICE` 与 `THIRD_PARTY_NOTICES.md`。
+
 ## v1.1.0-beta.3 Pre-release：GPLv3 与多 Provider
 
 - 整体采用 GPL-3.0-only，完整 LICENSE、NOTICE、THIRD_PARTY_NOTICES 随 APK 打包；原创 WNE 图标替换早期微信 APK 图标。
