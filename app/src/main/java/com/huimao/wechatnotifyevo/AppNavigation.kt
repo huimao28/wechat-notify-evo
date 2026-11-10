@@ -1,5 +1,18 @@
 package com.huimao.wechatnotifyevo
 
+enum class AppDestination { SETTINGS, ABOUT, DIAGNOSTICS }
+
+/** Compatibility policy retained for existing state restoration tests and old saved values. */
+object AppNavigationPolicy {
+    fun restore(value: String?): AppDestination =
+        AppDestination.entries.firstOrNull { it.name == value } ?: AppDestination.SETTINGS
+
+    fun backTarget(destination: AppDestination): AppDestination? = when (destination) {
+        AppDestination.SETTINGS -> null
+        AppDestination.ABOUT, AppDestination.DIAGNOSTICS -> AppDestination.SETTINGS
+    }
+}
+
 sealed interface AppRoute
 data object HomeRoute : AppRoute
 data object HistoryRoute : AppRoute

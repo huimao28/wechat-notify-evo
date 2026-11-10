@@ -125,6 +125,19 @@ private class FakeHistoryDao : HistoryDao {
 
     override suspend fun count(): Int = rows.size
 
+    override suspend fun conversationSummaries(from: Long, limit: Int, offset: Int): List<ConversationSummaryEntity> =
+        rows.filter { it.timestamp >= from }.groupBy { it.conversationStableId }
+            .map { (id, messages) -> ConversationSummaryEntity(id, messages.maxOf { it.timestamp }, messages.size) }
+            .sortedByDescending { it.lastTimestamp }.drop(offset).take(limit)
+
+    override suspend fun latestConversationMessage(id: String): CapturedMessageEntity? =
+        rows.filter { it.conversationStableId == id }.maxByOrNull { it.timestamp }
+
+    override suspend fun encryptedBytes(): Long = rows.sumOf {
+        (it.title.ciphertext.size + it.sender.ciphertext.size + it.text.ciphertext.size +
+            it.title.nonce.size + it.sender.nonce.size + it.text.nonce.size).toLong()
+    }
+
     override suspend fun deleteOlderThan(cutoff: Long): Int =
         removeWhere { it.timestamp < cutoff }
 
