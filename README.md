@@ -104,6 +104,13 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。
 
+## v1.1.0-beta.6 Pre-release：Navigation 与 Provider 热修复
+
+- 修复 Navigation 3 切换 Tab 时空 back stack 导致的崩溃。
+- 修复 Provider/API Key 通过 Room 在主线程保存失败，并明确展示运行中、成功与错误状态。
+- API Key 擦除后不再被旧状态恢复，且敏感 Key 不进入 SavedState。
+- 完整包含 beta.5 的多 Provider、Keystore Key 保护、GPL-3.0-only 法律文件与微信 launcher 图标恢复功能。
+
 ## v1.1.0-beta.5 Pre-release：Provider 编辑器修复
 
 - 修复“新增 Provider”按钮无响应；编辑器明确区分 Create / Edit / Closed，并提供取消、保存、保存并设为默认。
