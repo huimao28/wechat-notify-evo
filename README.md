@@ -104,6 +104,12 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。
 
+## v1.1.0-beta.3 Pre-release：GPLv3 与多 Provider
+
+- 整体采用 GPL-3.0-only，完整 LICENSE、NOTICE、THIRD_PARTY_NOTICES 随 APK 打包；原创 WNE 图标替换早期微信 APK 图标。
+- OpenMinis 风格多实例 Provider：OpenAI、DeepSeek、OpenRouter、自定义 OpenAI-compatible；Key 由 Keystore 加密且不回显，旧单 Provider 配置幂等迁移。
+- 包含 beta.2 CarConnection 真实检测、beta.1 本地记录/AI 与五 Tab，以及 v1.0.20.1 气泡热修复。
+
 ## v1.1.0-beta.2 Pre-release：Android Auto 真实连接检测
 
 - 使用 AndroidX Car App 官方 `CarConnection` 实时检测 `NOT_CONNECTED`、`NATIVE`、`PROJECTION`、`UNKNOWN`；Android Auto DHU 投影连接应显示 `PROJECTION`。
