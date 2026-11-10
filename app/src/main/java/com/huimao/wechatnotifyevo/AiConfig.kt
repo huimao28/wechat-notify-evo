@@ -18,7 +18,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 enum class SecretUpdate{KEEP,REPLACE,CLEAR}
-object AiSecretPolicy{fun action(value:CharArray?,clear:Boolean)=when{clear->SecretUpdate.CLEAR;value.isNullOrEmpty()->SecretUpdate.KEEP;else->SecretUpdate.REPLACE}}
+object AiSecretPolicy{fun action(value:CharArray?,clear:Boolean)=when{clear->SecretUpdate.CLEAR;value == null || value.isEmpty()->SecretUpdate.KEEP;else->SecretUpdate.REPLACE}}
 interface AiSecretStore{
  fun put(providerId:String,secret:CharArray);fun get(providerId:String):CharArray?;fun clear(providerId:String)
  fun exists(providerId:String):Boolean{val s=get(providerId)?:return false;s.fill('\u0000');return true}
