@@ -362,6 +362,10 @@ class WeChatListenerService : NotificationListenerService() {
             NotificationFactory.buildConversationNotification(this, conv, silent = false)
         )
         InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.EVOLVED_POSTED)
+        // Only a successfully posted evolved notification is eligible for local history.
+        // The recorder snapshots permitted fields and performs crypto/Room work off-thread;
+        // failures are isolated and can never roll back or suppress the notification.
+        HistoryRecorder.recordEvolved(this, conv)
         refreshSummaries(this)
         ManualConversationLearning.considerAutomatic(this, conv)
     }
