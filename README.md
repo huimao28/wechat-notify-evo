@@ -104,6 +104,12 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。
 
+## v1.1.0-beta.5 Pre-release：Provider 编辑器修复
+
+- 修复“新增 Provider”按钮无响应；编辑器明确区分 Create / Edit / Closed，并提供取消、保存、保存并设为默认。
+- 有未保存修改时禁用连接测试；API Key 不进入 SavedState。
+- 完整包含 beta.4 恢复的微信 launcher 图标，以及 beta.3 的多 Provider、Keystore 密钥保护与 GPL-3.0-only 功能。
+
 ## v1.1.0-beta.4 Pre-release：恢复原应用图标
 
 - 这是 beta.3 的图标修正版，包含 beta.3 全部功能；仅将 launcher 图标与 adaptive icon 引用恢复为 beta.2 版本，不改通知 `smallIcon` 或运行时圆形头像逻辑。
@@ -136,4 +142,4 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 WNE 项目自有代码与原创资源以 **GNU General Public License v3.0 only (`GPL-3.0-only`)** 发布。完整条款见 [LICENSE](LICENSE)，版权与迁移说明见 [NOTICE](NOTICE)，第三方依赖、研究参考及素材边界见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。源码仓库：<https://github.com/huimao28/wechat-notify-evo>。
 
-发行 APK 使用原创通用 WNE 矢量启动图标，不再分发从微信 APK 获取的原版 launcher 图标。微信/Tencent 名称与商标归其权利人所有，本项目与其无隶属或背书关系。
+发行 APK 为兼容识别保留恢复的微信 launcher 图标；该商标素材不按 GPL 授权，权利归腾讯和/或相关权利人。项目代码与 GPL 覆盖材料仍为 GPL-3.0-only；本项目与腾讯无隶属或背书关系，详见 `NOTICE` 与 `THIRD_PARTY_NOTICES.md`。
