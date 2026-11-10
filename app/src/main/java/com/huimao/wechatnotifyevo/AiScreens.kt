@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * Copyright (C) 2025-2026 OpenMinis contributors
+ * Copyright (C) 2026 WeChat Notify Evo contributors
+ * Provider settings interaction adapted from OpenMinis; modified for WNE OpenAI-compatible-only BYOK flow.
+ */
 package com.huimao.wechatnotifyevo
 
 import android.content.ClipData
@@ -56,7 +61,7 @@ fun AiSummaryScreen(state: AiUiState, actions: AiScreenActions) {
     if (state.phase is AiPhase.Confirming) AlertDialog(
         onDismissRequest = actions.dismissConfirmation,
         title = { Text("确认发送原文？") },
-        text = { Text("将向 ${state.config.endpointHost} 发送 ${state.range.label}范围内 ${state.prepared.conversationCount} 个会话、${state.prepared.messages.size} 条消息、${state.prepared.characterCount} 字符。原文将离开设备。") },
+        text = { Text("将使用 ${state.config.providerName}（${state.config.endpointHost} / ${state.config.model}）发送 ${state.range.label}范围内 ${state.prepared.conversationCount} 个会话、${state.prepared.messages.size} 条消息、${state.prepared.characterCount} 字符。原文将离开设备。") },
         confirmButton = { Button(onClick = actions.generate) { Text("确认并联网生成") } },
         dismissButton = { TextButton(onClick = actions.dismissConfirmation) { Text("取消") } },
     )
@@ -86,6 +91,17 @@ fun AiSummaryScreen(state: AiUiState, actions: AiScreenActions) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { PrivacyBanner(state) }
+            if (state.providers.isNotEmpty()) item {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("本次使用 Provider：${state.config.providerName} · ${state.config.endpointHost} · ${state.config.model}", style = MaterialTheme.typography.bodySmall)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.providers.filter { it.enabled }.forEach { p ->
+                            if (p.id == state.selectedProviderId) Button(onClick = { actions.selectProvider(p.id) }) { Text(p.displayName) }
+                            else OutlinedButton(onClick = { actions.selectProvider(p.id) }) { Text(p.displayName) }
+                        }
+                    }
+                }
+            }
             item {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AiRange.entries.forEach { range ->
@@ -127,7 +143,7 @@ fun AiSummaryScreen(state: AiUiState, actions: AiScreenActions) {
 }
 
 data class AiScreenActions(
-    val setRange: (AiRange) -> Unit, val toggle: (String) -> Unit, val preview: () -> Unit,
+    val setRange: (AiRange) -> Unit, val selectProvider: (String) -> Unit, val toggle: (String) -> Unit, val preview: () -> Unit,
     val confirm: () -> Unit, val dismissConfirmation: () -> Unit, val generate: () -> Unit,
     val cancel: () -> Unit, val retry: () -> Unit, val onLeave: () -> Unit,
 )
@@ -140,32 +156,39 @@ data class AiScreenActions(
 }
 
 @Composable
-fun AiSettingsCard(state: AiUiState, save: (String, String, CharArray) -> Unit, requestTest: () -> Unit) {
-    var endpoint by remember(state.config.endpoint) { mutableStateOf(state.config.endpoint) }
-    var model by remember(state.config.model) { mutableStateOf(state.config.model) }
-    var key by remember { mutableStateOf("") }
-    var confirmTest by remember { mutableStateOf(false) }
-    if (confirmTest) AlertDialog(
-        onDismissRequest = { confirmTest = false }, title = { Text("测试连接？") },
-        text = { Text("将连接 ${state.config.endpointHost}，只发送固定 ping 提示，不发送聊天内容；不保存响应正文。") },
-        confirmButton = { Button(onClick = { confirmTest = false; requestTest() }) { Text("确认测试") } },
-        dismissButton = { TextButton(onClick = { confirmTest = false }) { Text("取消") } },
-    )
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("AI 模型（BYOK）", style = MaterialTheme.typography.titleLarge)
-            Text("仅支持 HTTPS OpenAI-compatible /v1/chat/completions。保存配置不会联网；只有主动测试或确认总结才联网。", style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(endpoint, { endpoint = it }, label = { Text("HTTPS endpoint") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(model, { model = it }, label = { Text("Model") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(key, { key = it }, label = { Text(if (state.config.hasApiKey) "API Key（留空保持现有）" else "API Key") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
-            Text("API Key 由 Android Keystore AES-GCM 保护，不进入 Room、明文偏好、日志或诊断报告。锁屏/密钥失效后需重新填写。", style = MaterialTheme.typography.bodySmall)
-            Button(onClick = { val chars = key.toCharArray(); save(endpoint, model, chars); key = "" }, modifier = Modifier.fillMaxWidth()) { Text("保存配置（不联网）") }
-            OutlinedButton(onClick = { confirmTest = true }, enabled = state.config.configured, modifier = Modifier.fillMaxWidth()) { Text("测试连接") }
-            state.testStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+fun AiSettingsCard(state: AiUiState, reload: () -> Unit, requestTest: () -> Unit) {
+    val context = LocalContext.current
+    var editingId by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf("") }; var endpoint by remember { mutableStateOf("") }
+    var model by remember { mutableStateOf("") }; var key by remember { mutableStateOf("") }
+    var reveal by remember { mutableStateOf(false) }; var clearConfirm by remember { mutableStateOf(false) }
+    var deleteConfirm by remember { mutableStateOf(false) }; var testConfirm by remember { mutableStateOf(false) }
+    fun edit(p: AiProvider?) { editingId=p?.id; name=p?.displayName.orEmpty(); endpoint=p?.endpoint.orEmpty(); model=p?.modelId.orEmpty(); key="" }
+    val selected=state.providers.firstOrNull{it.id==editingId}
+    if(clearConfirm) AlertDialog(onDismissRequest={clearConfirm=false},title={Text("清除 API Key？")},text={Text("清除后该 Provider 无法请求，且不能恢复。")},confirmButton={Button(onClick={selected?.let{AiProviderStore.save(context,it.entity,null,clearKey=true)};clearConfirm=false;reload()}){Text("确认清除")}},dismissButton={TextButton(onClick={clearConfirm=false}){Text("取消")}})
+    if(deleteConfirm) AlertDialog(onDismissRequest={deleteConfirm=false},title={Text("删除 Provider？")},text={Text("将删除普通配置和对应密钥；默认 Provider 会回退到首个已启用项。")},confirmButton={Button(onClick={editingId?.let{AiProviderStore.delete(context,it)};deleteConfirm=false;edit(null);reload()}){Text("删除")}},dismissButton={TextButton(onClick={deleteConfirm=false}){Text("取消")}})
+    if(testConfirm) AlertDialog(onDismissRequest={testConfirm=false},title={Text("测试连接？")},text={Text("仅发送固定 ping，不发送聊天内容；可随时取消。未保存草稿请先保存（Key 留空会保留现有值）。")},confirmButton={Button(onClick={testConfirm=false;requestTest()}){Text("确认测试")}},dismissButton={TextButton(onClick={testConfirm=false}){Text("取消")}})
+    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceContainerLow)) { Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+        Text("AI Provider（OpenAI-compatible）",style=MaterialTheme.typography.titleLarge)
+        Text("支持多个 Provider；不支持 Gemini native。端点必须是完整 HTTPS chat/completions URL。",style=MaterialTheme.typography.bodySmall)
+        state.providers.forEach { p -> Card(onClick={edit(p)},modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp)){Text(p.displayName);Text("${if(p.id==state.providers.firstOrNull{it.id==state.selectedProviderId}?.id) "当前" else ""} ${p.endpointHost} · ${p.modelId} · ${if(p.hasApiKey) "Key 已配置" else "Key 未配置"}",style=MaterialTheme.typography.bodySmall)}} }
+        OutlinedButton(onClick={edit(null)},modifier=Modifier.fillMaxWidth()){Text("新增 Provider")}
+        if(editingId!=null||name.isNotEmpty()||endpoint.isNotEmpty()) {
+            OutlinedTextField(name,{name=it},label={Text("名称")},modifier=Modifier.fillMaxWidth())
+            Text("类型：OPENAI_COMPAT",style=MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){AiProviderPreset.entries.forEach{preset->TextButton(onClick={name=preset.label;endpoint=preset.endpoint;model=preset.model}){Text(preset.label)}}}
+            OutlinedTextField(endpoint,{endpoint=it},label={Text("HTTPS chat completions endpoint")},modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(model,{model=it},label={Text("Model ID")},modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(key,{key=it},label={Text(if(selected?.hasApiKey==true)"API Key（留空保留）" else "API Key")},visualTransformation=if(reveal) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
+            TextButton(onClick={reveal=!reveal}){Text(if(reveal)"隐藏 Key" else "显示输入")}
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(onClick={val now=System.currentTimeMillis();val e=selected?.entity?:AiProviderEntity(displayName=name,baseUrl="",endpoint=endpoint,modelId=model,createdAt=now,updatedAt=now,sortOrder=state.providers.size);AiProviderStore.save(context,e.copy(displayName=name,endpoint=endpoint,modelId=model),key.toCharArray()).onSuccess{edit(it.providers.firstOrNull{x->x.id==e.id});reload()}}){Text("保存")};Button(onClick={val p=selected?:return@Button;AiProviderStore.save(context,p.entity.copy(displayName=name,endpoint=endpoint,modelId=model),key.toCharArray(),makeDefault=true).onSuccess{reload()}}){Text("保存并默认")}}
+            if(selected!=null){Row{TextButton(onClick={AiProviderStore.setEnabled(context,selected.id,!selected.enabled);reload()}){Text(if(selected.enabled)"停用" else "启用")};TextButton(onClick={AiProviderStore.setDefault(context,selected.id);reload()}){Text("设为默认")};TextButton(onClick={clearConfirm=true}){Text("清除 Key")};TextButton(onClick={deleteConfirm=true}){Text("删除")}}}
+            OutlinedButton(onClick={testConfirm=true},modifier=Modifier.fillMaxWidth()){Text("测试连接（固定 ping）")}
         }
-    }
+        Text("API Key 由 Android Keystore AES-GCM 按 Provider 隔离；不进入 Room、SavedState、日志或备份。",style=MaterialTheme.typography.bodySmall)
+        state.testStatus?.let{Text(it)}
+    }}
 }
-
 private fun shareSummary(context: Context, summary: String) {
     val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, summary)
     context.startActivity(Intent.createChooser(intent, "分享 AI 总结"))
