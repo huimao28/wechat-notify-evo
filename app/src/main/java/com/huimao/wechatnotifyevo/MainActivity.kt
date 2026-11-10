@@ -1,25 +1,30 @@
 package com.huimao.wechatnotifyevo
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.navigationevent.NavigationEvent
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.NavigationEventTransitionState
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.ui.NavDisplay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,63 +33,82 @@ class MainActivity : ComponentActivity() {
         ConversationShortcuts.pruneOrphans(this)
         KeepAliveCoordinator.restoreIfEnabled(this)
         enableEdgeToEdge()
-        setContent {
-            WeChatNotifyEvoTheme { AppContent() }
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
+        setContent { WeChatNotifyEvoTheme { AppContent() } }
     }
 }
 
 @Composable
-private fun AppContent() {
-    var savedDestination by rememberSaveable { mutableStateOf(AppDestination.SETTINGS.name) }
-    val destination = AppNavigationPolicy.restore(savedDestination)
-    val navigateTo: (AppDestination) -> Unit = { savedDestination = it.name }
-    val navigateBack = { savedDestination = AppDestination.SETTINGS.name }
-    val backState = rememberNavigationEventState<NavigationEventInfo>(NavigationEventInfo.None)
-    val transition = backState.transitionState
-    val event = (transition as? NavigationEventTransitionState.InProgress)?.latestEvent
-    val progress = event?.progress?.coerceIn(0f, 1f) ?: 0f
-    val direction = if (event?.swipeEdge == NavigationEvent.EDGE_RIGHT) -1f else 1f
-    val predictiveShape = MaterialTheme.shapes.extraLarge
+private fun AppContent(historyViewModel: HistoryViewModel = viewModel()) {
+    val historyState by historyViewModel.state.collectAsStateWithLifecycle()
+    val backStack = remember { mutableStateListOf<AppRoute>(HomeRoute) }
+    val current = backStack.lastOrNull() ?: HomeRoute
+    val selectedTab = TopLevelNavigationPolicy.tabFor(current)
 
-    NavigationBackHandler(
-        state = backState,
-        isBackEnabled = AppNavigationPolicy.backTarget(destination) != null,
-        onBackCompleted = navigateBack,
-    )
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
-    ) {
-        if (destination == AppDestination.SETTINGS) {
-            SettingsRoute(
-                onOpenAbout = { navigateTo(AppDestination.ABOUT) },
-                onOpenDiagnostics = { navigateTo(AppDestination.DIAGNOSTICS) },
-            )
-        } else {
-            // Keep the real parent destination behind the detail page so the system gesture
-            // reveals the correct surface without a flash at either system edge.
-            SettingsRoute(onOpenAbout = {}, onOpenDiagnostics = {})
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        translationX = direction * size.width * 0.08f * progress
-                        scaleX = 1f - 0.06f * progress
-                        scaleY = 1f - 0.06f * progress
-                        alpha = 1f - 0.12f * progress
-                        clip = true
-                        shape = predictiveShape
-                    },
-            ) {
-                when (destination) {
-                    AppDestination.ABOUT -> AboutScreen(onBack = navigateBack)
-                    AppDestination.DIAGNOSTICS -> DiagnosticsRoute(onBack = navigateBack)
-                    AppDestination.SETTINGS -> Unit
-                }
-            }
+    fun switchTab(tab: TopLevelTab) {
+        val next = TopLevelNavigationPolicy.switchStack(backStack, tab)
+        backStack.clear(); backStack.addAll(next)
+        historyViewModel.closeConversation()
+    }
+    fun openDetail(route: AppRoute) {
+        val next = TopLevelNavigationPolicy.openDetail(backStack, route)
+        backStack.clear(); backStack.addAll(next)
+    }
+    fun navigateBack() {
+        if (backStack.size > 1) {
+            if (backStack.last() is HistoryDetailRoute) historyViewModel.closeConversation()
+            backStack.removeLastOrNull()
         }
     }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { historyViewModel.onResume() }
+
+    NavigationSuiteScaffold(
+        navigationSuiteItems = {
+            TopLevelTab.entries.forEach { tab ->
+                item(
+                    selected = selectedTab == tab,
+                    onClick = { switchTab(tab) },
+                    icon = { Icon(tab.icon(), contentDescription = tab.label) },
+                    label = { Text(tab.label) },
+                )
+            }
+        },
+    ) {
+        NavDisplay(
+            backStack = backStack,
+            onBack = ::navigateBack,
+            entryProvider = entryProvider {
+                entry<HomeRoute> {
+                    HomeScreen(historyState, historyViewModel::setRecordingEnabled, { switchTab(TopLevelTab.HISTORY) }, { switchTab(TopLevelTab.SETTINGS) })
+                }
+                entry<HistoryRoute> {
+                    HistoryScreen(historyState, historyViewModel::setRange, { id -> historyViewModel.openConversation(id); openDetail(HistoryDetailRoute(id)) }, historyViewModel::loadMoreConversations, historyViewModel::clearAll)
+                }
+                entry<HistoryDetailRoute> {
+                    HistoryDetailScreen(historyState, ::navigateBack, historyViewModel::loadMoreMessages, historyViewModel::deleteConversation, historyViewModel::clearAll)
+                }
+                entry<AiRoute> { AiPlaceholderScreen() }
+                entry<SettingsRouteKey> {
+                    SettingsRoute(
+                        onOpenAbout = { switchTab(TopLevelTab.ABOUT) },
+                        onOpenDiagnostics = { openDetail(DiagnosticsRouteKey) },
+                        privacyContent = {
+                            HistoryPrivacySettingsCard(historyState, historyViewModel::setRecordingEnabled, historyViewModel::setRetention, historyViewModel::saveExcluded, historyViewModel::clearAll)
+                        },
+                    )
+                }
+                entry<DiagnosticsRouteKey> { DiagnosticsRoute(onBack = ::navigateBack) }
+                entry<AboutRoute> { AboutScreen() }
+            },
+        )
+    }
+}
+
+private fun TopLevelTab.icon(): ImageVector = when (this) {
+    TopLevelTab.HOME -> Icons.Default.Home
+    TopLevelTab.HISTORY -> Icons.AutoMirrored.Filled.List
+    TopLevelTab.AI -> Icons.Default.Star
+    TopLevelTab.SETTINGS -> Icons.Default.Settings
+    TopLevelTab.ABOUT -> Icons.Default.Info
 }
