@@ -6,6 +6,9 @@ enum class DiagnosticStage(val wireName: String) {
     MISSING_TITLE("missingTitle"), MISSING_TICKER("missingTicker"), MISSING_TEXT("missingText"),
     GROUP_DISABLED("groupDisabled"), EVOLVED_POSTED("evolvedPosted"), SHORTCUT_FAILED("shortcutFailed"),
     BUBBLE_ELIGIBILITY("bubbleEligibility"), AUTO_LEARN_STARTED("autoLearnStarted"),
+    AUTO_LEARN_SUCCESS("autoLearnSuccess"), AUTO_LEARN_MISSING_MAIN_USER("missingMainUser"),
+    AUTO_LEARN_TIMEOUT("timeout"), AUTO_LEARN_SEND_FAILED("sendFailed"),
+    AUTO_LEARN_RATE_LIMITED("rateLimited"), AUTO_LEARN_BUSY("busy"),
     AUTO_LEARN_RESULT("autoLearnResult"), AUTO_LEARN_SKIP("autoLearnSkip");
 
     fun explanation(): String = when (this) {
@@ -23,8 +26,14 @@ enum class DiagnosticStage(val wireName: String) {
         SHORTCUT_FAILED -> "会话 Shortcut 未能确认发布"
         BUBBLE_ELIGIBILITY -> "已按当前气泡开关记录本条资格"
         AUTO_LEARN_STARTED -> "已开始自动学习（可能短暂打开微信）"
-        AUTO_LEARN_RESULT -> "自动学习已结束；结果不含会话信息"
-        AUTO_LEARN_SKIP -> "自动学习条件不满足或已跳过"
+        AUTO_LEARN_SUCCESS -> "自动学习成功并已刷新直达 Shortcut"
+        AUTO_LEARN_MISSING_MAIN_USER -> "自动学习回调缺少会话标识；下条通知可重试"
+        AUTO_LEARN_TIMEOUT -> "自动学习超时；下条通知可重试"
+        AUTO_LEARN_SEND_FAILED -> "自动学习入口发送失败；下条通知可重试"
+        AUTO_LEARN_RATE_LIMITED -> "自动学习限频；未消耗会话机会"
+        AUTO_LEARN_BUSY -> "自动学习忙碌；未消耗会话机会"
+        AUTO_LEARN_RESULT -> "自动学习结束但快照已失效；下条通知可重试"
+        AUTO_LEARN_SKIP -> "自动学习已关闭、已成功或条件不满足"
     }
 }
 

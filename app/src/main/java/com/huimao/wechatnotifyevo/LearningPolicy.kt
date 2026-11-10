@@ -1,22 +1,32 @@
 package com.huimao.wechatnotifyevo
 
-/** Main-thread only. No queue: a skipped first encounter is consumed, not retried. */
+enum class AutoLearningDecision { ADMITTED, DISABLED, BUSY, RATE_LIMITED, ALREADY_CONSIDERED, ALREADY_LEARNED, STALE }
+
+/** Main-thread only. Busy/rate-limited work is skipped without consuming the conversation. */
 class AutoLearningPolicy {
     private val attempts = ArrayDeque<Long>()
 
-    fun admit(conv: Conversation, enabled: Boolean, busy: Boolean, now: Long): Boolean {
-        if (conv.autoLearningConsidered) return false
-        conv.autoLearningConsidered = true
-        if (!enabled || busy || conv.learnedMainUser != null ||
-            ConversationStore.get(conv.nid, conv.sourceUserId) !== conv) return false
-        while (attempts.isNotEmpty() && now - attempts.first() >= 3_600_000L) {
-            attempts.removeFirst()
-        }
+    fun decide(conv: Conversation, enabled: Boolean, busy: Boolean, now: Long): AutoLearningDecision {
+        if (!enabled) return AutoLearningDecision.DISABLED
+        if (conv.autoLearningConsidered) return AutoLearningDecision.ALREADY_CONSIDERED
+        if (conv.learnedMainUser != null) return AutoLearningDecision.ALREADY_LEARNED
+        if (ConversationStore.get(conv.nid, conv.sourceUserId) !== conv) return AutoLearningDecision.STALE
+        if (busy) return AutoLearningDecision.BUSY
+        while (attempts.isNotEmpty() && now - attempts.first() >= 3_600_000L) attempts.removeFirst()
         if (attempts.size >= 6 || (attempts.isNotEmpty() && now - attempts.last() < 60_000L)) {
-            return false
+            return AutoLearningDecision.RATE_LIMITED
         }
         attempts.addLast(now)
-        return true
+        conv.autoLearningConsidered = true
+        return AutoLearningDecision.ADMITTED
+    }
+
+    fun admit(conv: Conversation, enabled: Boolean, busy: Boolean, now: Long): Boolean =
+        decide(conv, enabled, busy, now) == AutoLearningDecision.ADMITTED
+
+    /** A failed admitted attempt may be retried by a later notification post. */
+    fun failed(conv: Conversation) {
+        if (conv.learnedMainUser == null) conv.autoLearningConsidered = false
     }
 }
 
