@@ -63,8 +63,11 @@ object DiagnosticsPlatform {
             listOf(NotificationFactory.CHANNEL_MESSAGE, NotificationFactory.CHANNEL_GROUP, NotificationFactory.CHANNEL_BOT)
                 .joinToString { id -> "$id=${nm?.getNotificationChannel(id)?.canBubble() ?: false}" }
         } catch (_: RuntimeException) { "未检测" } else "系统版本不支持"
+        val aiConfig = AiConfigStore.load(app)
         val statuses = listOf(
             DiagnosticStatus("应用运行", "正常", true),
+            DiagnosticStatus("AI configured", if (aiConfig.configured) "是" else "否", aiConfig.configured),
+            DiagnosticStatus("AI endpoint host", aiConfig.endpointHost ?: "未配置"),
             DiagnosticStatus("发送通知权限", if (postGranted) "已授予" else "未授予", postGranted),
             DiagnosticStatus("通知使用权", if (listenerGranted) "已配置" else "未配置", listenerGranted),
             DiagnosticStatus("监听服务连接", if (WeChatListenerService.isListenerConnected()) "已连接" else "未连接", WeChatListenerService.isListenerConnected()),

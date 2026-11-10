@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(onBack: (() -> Unit)? = null) {
     val context = LocalContext.current
     val versionName = remember(context) {
         runCatching {
@@ -55,7 +55,7 @@ fun AboutScreen(onBack: () -> Unit) {
             TopAppBar(
                 title = { Text(stringResource(R.string.about_title)) },
                 navigationIcon = {
-                    TextButton(onClick = onBack) {
+                    if (onBack != null) TextButton(onClick = onBack) {
                         Text(stringResource(R.string.about_back))
                     }
                 },
