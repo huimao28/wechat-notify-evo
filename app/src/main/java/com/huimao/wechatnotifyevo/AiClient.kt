@@ -11,6 +11,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.Buffer
+import okio.BufferedSource
 
 class AiClientException(val safeMessage: String) : IOException(safeMessage)
 
@@ -26,7 +28,7 @@ class AiModelsClient(private val client: OkHttpClient = OkHttpAiCompletionClient
         val response = try { client.newCall(request).await() } catch (_: IOException) { throw AiClientException("网络请求失败或超时") }
         return response.use {
             if (!it.isSuccessful) throw AiClientException("服务返回 HTTP ${it.code}")
-            val body = it.body.source().readByteArray(AI_MAX_RESPONSE_BYTES + 1)
+            val body = it.body.source().readUpTo(AI_MAX_RESPONSE_BYTES + 1)
             if (body.size > AI_MAX_RESPONSE_BYTES) throw AiClientException("响应超过 2MB 限制")
             runCatching { AiJson.modelIds(body.toString(Charsets.UTF_8)) }.getOrElse { throw AiClientException("模型列表格式无效") }
         }
@@ -72,7 +74,7 @@ class OkHttpAiCompletionClient(
         val body = response.body
         if (body.contentLength() > AI_MAX_RESPONSE_BYTES) throw AiClientException("响应超过 2MB 限制")
         val source = body.source()
-        val bytes = source.readByteArray(AI_MAX_RESPONSE_BYTES + 1)
+        val bytes = source.readUpTo(AI_MAX_RESPONSE_BYTES + 1)
         if (bytes.size > AI_MAX_RESPONSE_BYTES) throw AiClientException("响应超过 2MB 限制")
         val content = bytes.toString(Charsets.UTF_8)
         return runCatching { if (mode == AiApiMode.RESPONSES) AiJson.responsesContent(content) else AiJson.responseContent(content) }
@@ -91,6 +93,14 @@ class OkHttpAiCompletionClient(
             .followSslRedirects(false)
             .build()
     }
+}
+
+private fun BufferedSource.readUpTo(limit: Long): ByteArray {
+    val buffer = Buffer()
+    while (buffer.size < limit) {
+        if (read(buffer, limit - buffer.size) == -1L) break
+    }
+    return buffer.readByteArray()
 }
 
 private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->

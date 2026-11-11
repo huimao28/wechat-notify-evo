@@ -4,23 +4,16 @@ import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.tls.HandshakeCertificates
-import okhttp3.tls.HeldCertificate
 import org.junit.Assert.*
 import org.junit.Test
 
 class AiClientMockWebServerTest {
- private fun tlsServer(): Pair<MockWebServer,OkHttpClient> {
-  val cert=HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
-  val serverCerts=HandshakeCertificates.Builder().heldCertificate(cert).build()
-  val clientCerts=HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()
-  val server=MockWebServer().apply { protocols=listOf(Protocol.HTTP_1_1);useHttps(serverCerts.sslSocketFactory()); start() }
-  val client=OkHttpClient.Builder().protocols(listOf(Protocol.HTTP_1_1)).sslSocketFactory(clientCerts.sslSocketFactory(),clientCerts.trustManager).build()
-  return server to client
+ private fun server(): Pair<MockWebServer,OkHttpClient> {
+  val server=MockWebServer().apply { start() }
+  return server to OkHttpClient()
  }
  @Test fun chatAndResponsesRequestsAreComplete() = runBlocking {
-  val (server,http)=tlsServer()
+  val (server,http)=server()
   try {
    server.enqueue(MockResponse.Builder().body("{\"choices\":[{\"message\":{\"content\":\"chat-ok\"}}]}").build())
    server.enqueue(MockResponse.Builder().body("{\"output\":[{\"content\":[{\"type\":\"output_text\",\"text\":\"response-ok\"}]}]}").build())
@@ -32,7 +25,7 @@ class AiClientMockWebServerTest {
   } finally { server.close() }
  }
  @Test fun modelsGetParsesIds() = runBlocking {
-  val (server,http)=tlsServer()
+  val (server,http)=server()
   try {
    server.enqueue(MockResponse.Builder().body("{\"data\":[{\"id\":\"m1\"},{\"id\":\"m2\"}]}").build())
    val provider=AiProviderEntity(displayName="p",baseUrl=server.url("/").toString(),createdAt=1,updatedAt=1,sortOrder=0,appendV1=true)
