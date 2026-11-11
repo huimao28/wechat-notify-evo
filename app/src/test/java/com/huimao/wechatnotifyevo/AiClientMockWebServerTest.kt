@@ -14,9 +14,9 @@ class AiClientMockWebServerTest {
    server.enqueue(MockResponse.Builder().body("{\"output\":[{\"content\":[{\"type\":\"output_text\",\"text\":\"response-ok\"}]}]}").build())
    val client=OkHttpAiCompletionClient()
    assertEquals("chat-ok",client.complete(AiConfig(endpoint=server.url("/v1/chat/completions").toString(),model="m",apiMode=AiApiMode.CHAT_COMPLETIONS),"key".toCharArray(),"hello"))
-   val chat=server.takeRequest();assertEquals("POST",chat.method);assertTrue(chat.body.utf8().contains("\"messages\""));assertEquals("Bearer key",chat.headers["Authorization"])
+   val chat=server.takeRequest();assertEquals("POST",chat.method);assertTrue(chat.body!!.utf8().contains("\"messages\""));assertEquals("Bearer key",chat.headers["Authorization"])
    assertEquals("response-ok",client.complete(AiConfig(endpoint=server.url("/v1/responses").toString(),model="m",apiMode=AiApiMode.RESPONSES),"key".toCharArray(),"hello"))
-   val responses=server.takeRequest();val body=responses.body.utf8();assertTrue(body.contains("\"stream\":false"));assertTrue(body.contains("\"input\":\"hello\""))
+   val responses=server.takeRequest();val body=responses.body!!.utf8();assertTrue(body.contains("\"stream\":false"));assertTrue(body.contains("\"input\":\"hello\""))
   } finally { server.close() }
  }
  @Test fun modelsGetParsesIds() = runBlocking {
