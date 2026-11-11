@@ -17,7 +17,7 @@ class AiProviderPolicyTest {
 
     @Test fun officialPresetsAreExactAndHttps() {
         assertEquals("https://api.openai.com/v1/chat/completions", AiProviderEndpointResolver.resolve(AiProviderPreset.OPENAI.baseUrl, false).getOrThrow().chatCompletionsEndpoint)
-        assertEquals("https://api.deepseek.com/chat/completions", AiProviderEndpointResolver.resolve(AiProviderPreset.DEEPSEEK.baseUrl, true).getOrThrow().chatCompletionsEndpoint)
+        assertEquals("https://api.deepseek.com/chat/completions", AiProviderEndpointResolver.resolve(AiProviderPreset.DEEPSEEK.baseUrl, false).getOrThrow().chatCompletionsEndpoint)
         assertEquals("https://openrouter.ai/api/v1/chat/completions", AiProviderEndpointResolver.resolve(AiProviderPreset.OPENROUTER.baseUrl, false).getOrThrow().chatCompletionsEndpoint)
         AiProviderPreset.entries.filter { it != AiProviderPreset.CUSTOM }
             .forEach { assertTrue(AiProviderEndpointResolver.resolve(it.baseUrl,it.appendV1Suffix).isSuccess) }

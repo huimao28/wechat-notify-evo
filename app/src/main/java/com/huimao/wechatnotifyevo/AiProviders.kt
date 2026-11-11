@@ -17,7 +17,7 @@ import java.util.UUID
 enum class AiProviderKind { OPENAI_COMPAT }
 enum class AiProviderPreset(val label:String,val baseUrl:String,val model:String,val appendV1Suffix:Boolean){
  OPENAI("OpenAI","https://api.openai.com/v1","gpt-4o-mini",false),
- DEEPSEEK("DeepSeek","https://api.deepseek.com","deepseek-chat",true),
+ DEEPSEEK("DeepSeek","https://api.deepseek.com","deepseek-chat",false),
  OPENROUTER("OpenRouter","https://openrouter.ai/api/v1","openai/gpt-4o-mini",false),
  CUSTOM("自定义","","",true)
 }

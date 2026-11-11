@@ -19,7 +19,7 @@ class AiProviderBaseUrlTest {
     }
     @Test fun `presets resolve exactly once`() {
         assertEquals("https://api.openai.com/v1/chat/completions",resolved(AiProviderPreset.OPENAI.baseUrl,AiProviderPreset.OPENAI.appendV1Suffix).chatCompletionsEndpoint)
-        assertEquals("https://api.deepseek.com/v1/chat/completions",resolved(AiProviderPreset.DEEPSEEK.baseUrl,AiProviderPreset.DEEPSEEK.appendV1Suffix).chatCompletionsEndpoint)
+        assertEquals("https://api.deepseek.com/chat/completions",resolved(AiProviderPreset.DEEPSEEK.baseUrl,AiProviderPreset.DEEPSEEK.appendV1Suffix).chatCompletionsEndpoint)
         assertEquals("https://openrouter.ai/api/v1/chat/completions",resolved(AiProviderPreset.OPENROUTER.baseUrl,AiProviderPreset.OPENROUTER.appendV1Suffix).chatCompletionsEndpoint)
     }
     @Test fun `unsafe URL components are rejected`() {
