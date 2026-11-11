@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.Assert.*
@@ -14,8 +15,8 @@ class AiClientMockWebServerTest {
   val cert=HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
   val serverCerts=HandshakeCertificates.Builder().heldCertificate(cert).build()
   val clientCerts=HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()
-  val server=MockWebServer().apply { useHttps(serverCerts.sslSocketFactory()); start() }
-  val client=OkHttpClient.Builder().sslSocketFactory(clientCerts.sslSocketFactory(),clientCerts.trustManager).build()
+  val server=MockWebServer().apply { protocols=listOf(Protocol.HTTP_1_1);useHttps(serverCerts.sslSocketFactory()); start() }
+  val client=OkHttpClient.Builder().protocols(listOf(Protocol.HTTP_1_1)).sslSocketFactory(clientCerts.sslSocketFactory(),clientCerts.trustManager).build()
   return server to client
  }
  @Test fun chatAndResponsesRequestsAreComplete() = runBlocking {
