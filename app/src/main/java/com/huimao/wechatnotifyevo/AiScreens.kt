@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,6 +48,7 @@ import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -177,7 +179,7 @@ fun AiSettingsCard(state: AiUiState, actions: AiProviderActions) {
                 is ProviderEditorMode.Edit -> "edit"
             },
             "id" to value.editingId.orEmpty(), "name" to value.name,
-            "endpoint" to value.endpoint, "model" to value.model,
+            "baseUrl" to value.baseUrl, "model" to value.model, "appendV1" to value.appendV1Suffix,
         ) },
         restore = { saved ->
             val mode = when (saved["mode"] as String) {
@@ -185,7 +187,7 @@ fun AiSettingsCard(state: AiUiState, actions: AiProviderActions) {
                 "edit" -> ProviderEditorMode.Edit(saved["id"] as String)
                 else -> ProviderEditorMode.Closed
             }
-            ProviderEditorState(mode, saved["name"] as String, saved["endpoint"] as String, saved["model"] as String)
+            ProviderEditorState(mode, saved["name"] as String, saved["baseUrl"] as String, saved["model"] as String, saved["appendV1"] as Boolean)
         },
     ) }
     var editor by rememberSaveable(stateSaver = editorSaver) { mutableStateOf(ProviderEditorState()) }
@@ -204,10 +206,10 @@ fun AiSettingsCard(state: AiUiState, actions: AiProviderActions) {
     fun entityFromDraft(): AiProviderEntity {
         val now = System.currentTimeMillis()
         return (selected?.entity ?: AiProviderEntity(
-            displayName = editor.name, baseUrl = "", endpoint = editor.endpoint,
-            modelId = editor.model, createdAt = now, updatedAt = now,
+            displayName = editor.name, baseUrl = editor.baseUrl, endpoint = editor.baseUrl,
+            modelId = editor.model, appendV1Suffix = editor.appendV1Suffix, createdAt = now, updatedAt = now,
             sortOrder = state.providers.size,
-        )).copy(displayName = editor.name, endpoint = editor.endpoint, modelId = editor.model)
+        )).copy(displayName = editor.name, baseUrl = editor.baseUrl, endpoint = editor.baseUrl, modelId = editor.model, appendV1Suffix = editor.appendV1Suffix)
     }
     fun save(makeDefault: Boolean) {
         val submitted = key.toCharArray()
@@ -223,12 +225,12 @@ fun AiSettingsCard(state: AiUiState, actions: AiProviderActions) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("AI Provider（OpenAI-compatible）", style = MaterialTheme.typography.titleLarge)
-            Text("支持多个 Provider；不支持 Gemini native。端点必须是完整 HTTPS chat/completions URL。", style = MaterialTheme.typography.bodySmall)
+            Text("支持多个 OpenAI-compatible Provider；Base URL 可填写主机、/v1 或完整 chat/completions 地址。", style = MaterialTheme.typography.bodySmall)
             state.providers.forEach { provider ->
                 Card(onClick = { openEdit(provider) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = "编辑 Provider：${provider.displayName}" }) {
                     Column(Modifier.padding(12.dp)) {
                         Text(provider.displayName)
-                        Text("${if (provider.id == state.selectedProviderId) "当前" else ""} ${provider.endpointHost} · ${provider.modelId} · ${if (provider.hasApiKey) "Key 已配置" else "Key 未配置"}", style = MaterialTheme.typography.bodySmall)
+                        Text("${if (provider.id == state.selectedProviderId) "当前" else ""} ${provider.baseUrl.removePrefix("https://").substringBefore('/')} · ${provider.modelId} · ${if (provider.hasApiKey) "Key 已配置" else "Key 未配置"}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -237,9 +239,13 @@ fun AiSettingsCard(state: AiUiState, actions: AiProviderActions) {
                 OutlinedTextField(editor.name, { editor = editor.copy(name = it) }, label = { Text("名称") }, modifier = Modifier.fillMaxWidth())
                 Text("类型：OPENAI_COMPAT", style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    AiProviderPreset.entries.forEach { preset -> TextButton(onClick = { editor = editor.copy(name = preset.label, endpoint = preset.endpoint, model = preset.model) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(preset.label) } }
+                    AiProviderPreset.entries.forEach { preset -> TextButton(onClick = { editor = editor.copy(name = preset.label, baseUrl = preset.baseUrl, model = preset.model, appendV1Suffix = preset.appendV1Suffix) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(preset.label) } }
                 }
-                OutlinedTextField(editor.endpoint, { editor = editor.copy(endpoint = it) }, label = { Text("HTTPS chat completions endpoint") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(editor.baseUrl, { editor = editor.copy(baseUrl = it) }, label = { Text("Base URL") }, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(editor.appendV1Suffix, { editor = editor.copy(appendV1Suffix = it) })
+                    Text("自动追加 /v1")
+                }
                 OutlinedTextField(editor.model, { editor = editor.copy(model = it) }, label = { Text("Model ID") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(key, { key = it }, label = { Text(if (selected?.hasApiKey == true) "API Key（留空保留）" else "API Key") }, visualTransformation = if (reveal) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                 TextButton(onClick = { reveal = !reveal }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = if (reveal) "隐藏 API Key" else "显示 API Key 输入" }) { Text(if (reveal) "隐藏 Key" else "显示输入") }

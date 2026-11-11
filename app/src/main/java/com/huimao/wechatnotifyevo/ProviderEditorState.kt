@@ -10,21 +10,19 @@ sealed interface ProviderEditorMode {
 data class ProviderEditorState(
     val mode: ProviderEditorMode = ProviderEditorMode.Closed,
     val name: String = "",
-    val endpoint: String = "",
+    val baseUrl: String = "",
     val model: String = "",
+    val appendV1Suffix: Boolean = true,
 ) {
-    val isVisible: Boolean get() = mode !is ProviderEditorMode.Closed
-    val editingId: String? get() = (mode as? ProviderEditorMode.Edit)?.providerId
-    val canSaveAsDefault: Boolean get() = isVisible
-
+    val isVisible get() = mode !is ProviderEditorMode.Closed
+    val editingId get() = (mode as? ProviderEditorMode.Edit)?.providerId
+    val canSaveAsDefault get() = isVisible
     fun beginCreate() = ProviderEditorState(mode = ProviderEditorMode.Create)
-
     fun beginEdit(provider: AiProvider) = ProviderEditorState(
-        mode = ProviderEditorMode.Edit(provider.id),
-        name = provider.displayName,
-        endpoint = provider.endpoint,
+        mode = ProviderEditorMode.Edit(provider.id), name = provider.displayName,
+        baseUrl = if (provider.entity.apiPathMode == AiApiPathMode.FULL_ENDPOINT) provider.endpoint else provider.baseUrl,
         model = provider.modelId,
+        appendV1Suffix = provider.entity.appendV1Suffix,
     )
-
     fun cancel() = ProviderEditorState()
 }

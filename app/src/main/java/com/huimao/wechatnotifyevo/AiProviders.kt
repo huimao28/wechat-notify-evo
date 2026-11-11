@@ -9,26 +9,29 @@ package com.huimao.wechatnotifyevo
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 enum class AiProviderKind { OPENAI_COMPAT }
-enum class AiProviderPreset(val label:String,val endpoint:String,val model:String){
- OPENAI("OpenAI","https://api.openai.com/v1/chat/completions","gpt-4o-mini"),
- DEEPSEEK("DeepSeek","https://api.deepseek.com/chat/completions","deepseek-chat"),
- OPENROUTER("OpenRouter","https://openrouter.ai/api/v1/chat/completions","openai/gpt-4o-mini"),
- CUSTOM("自定义","","")
+enum class AiProviderPreset(val label:String,val baseUrl:String,val model:String,val appendV1Suffix:Boolean){
+ OPENAI("OpenAI","https://api.openai.com/v1","gpt-4o-mini",false),
+ DEEPSEEK("DeepSeek","https://api.deepseek.com","deepseek-chat",true),
+ OPENROUTER("OpenRouter","https://openrouter.ai/api/v1","openai/gpt-4o-mini",false),
+ CUSTOM("自定义","","",true)
 }
 @Entity(tableName="ai_providers",indices=[Index(value=["sortOrder"])])
 data class AiProviderEntity(
  @PrimaryKey val id:String=UUID.randomUUID().toString(), val displayName:String,
  val kind:AiProviderKind=AiProviderKind.OPENAI_COMPAT, val baseUrl:String,
  val endpoint:String, val modelId:String, val enabled:Boolean=true,
+ val appendV1Suffix:Boolean=true, val apiPathMode:AiApiPathMode=AiApiPathMode.BASE_URL,
  val createdAt:Long, val updatedAt:Long, val sortOrder:Int
 )
 @Entity(tableName="ai_settings") data class AiSettingsEntity(@PrimaryKey val singleton:Int=1,val defaultProviderId:String?)
 data class AiProvider(val entity:AiProviderEntity,val hasApiKey:Boolean){
- val id get()=entity.id; val displayName get()=entity.displayName; val endpoint get()=entity.endpoint
+ val id get()=entity.id; val displayName get()=entity.displayName; val endpoint get()=entity.endpoint; val baseUrl get()=entity.baseUrl
  val modelId get()=entity.modelId; val enabled get()=entity.enabled
  val endpointHost get()=AiEndpointValidator.validate(endpoint).getOrNull()?.host
  val configured get()=enabled&&hasApiKey&&endpointHost!=null&&modelId.isNotBlank()
@@ -42,10 +45,15 @@ data class AiProvider(val entity:AiProviderEntity,val hasApiKey:Boolean){
  @Insert(onConflict=OnConflictStrategy.REPLACE) fun settings(value:AiSettingsEntity)
  @Transaction fun deleteAndFallback(id:String){ delete(id); val s=settings(); if(s?.defaultProviderId==id) settings(AiSettingsEntity(defaultProviderId=all().firstOrNull{it.enabled}?.id)) }
 }
-@Database(entities=[AiProviderEntity::class,AiSettingsEntity::class],version=1,exportSchema=true)
+@Database(entities=[AiProviderEntity::class,AiSettingsEntity::class],version=2,exportSchema=true)
 @TypeConverters(AiProviderConverters::class) abstract class AiProviderDatabase:RoomDatabase(){ abstract fun dao():AiProviderDao
- companion object{@Volatile private var db:AiProviderDatabase?=null; fun get(c:Context)=db?:synchronized(this){db?:Room.databaseBuilder(c.applicationContext,AiProviderDatabase::class.java,"ai_providers_v1.db").build().also{db=it}}}}
-class AiProviderConverters{@TypeConverter fun kind(v:AiProviderKind)=v.name;@TypeConverter fun kind(v:String)=AiProviderKind.valueOf(v)}
+ companion object{
+  val MIGRATION_1_2=object:Migration(1,2){override fun migrate(db:SupportSQLiteDatabase){
+   db.execSQL("ALTER TABLE ai_providers ADD COLUMN appendV1Suffix INTEGER NOT NULL DEFAULT 0")
+   db.execSQL("ALTER TABLE ai_providers ADD COLUMN apiPathMode TEXT NOT NULL DEFAULT 'FULL_ENDPOINT'")
+  }}
+  @Volatile private var db:AiProviderDatabase?=null; fun get(c:Context)=db?:synchronized(this){db?:Room.databaseBuilder(c.applicationContext,AiProviderDatabase::class.java,"ai_providers_v1.db").addMigrations(MIGRATION_1_2).build().also{db=it}}}}
+class AiProviderConverters{@TypeConverter fun kind(v:AiProviderKind)=v.name;@TypeConverter fun kind(v:String)=AiProviderKind.valueOf(v);@TypeConverter fun pathMode(v:AiApiPathMode)=v.name;@TypeConverter fun pathMode(v:String)=AiApiPathMode.valueOf(v)}
 object AiProviderIds{ val LEGACY:String=UUID.nameUUIDFromBytes("wechat-notify-evo:legacy-ai-provider:v1".toByteArray(StandardCharsets.UTF_8)).toString() }
 
 data class AiProviderConfig(val providers:List<AiProvider>,val defaultProviderId:String?){

@@ -44,7 +44,7 @@ class ProviderEditorStateTest {
         assertFalse(cancelled.isVisible)
         assertTrue(cancelled.mode is ProviderEditorMode.Closed)
         assertEquals("", cancelled.name)
-        assertEquals("", cancelled.endpoint)
+        assertEquals("", cancelled.baseUrl)
         assertEquals("", cancelled.model)
         assertNull(cancelled.editingId)
     }
