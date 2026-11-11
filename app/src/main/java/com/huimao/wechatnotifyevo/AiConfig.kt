@@ -17,7 +17,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 enum class SecretUpdate{KEEP,REPLACE,CLEAR}
 object ProviderOperationPolicy{fun safeFailureMessage(@Suppress("UNUSED_PARAMETER")e:Throwable)="操作失败，请检查配置后重试"}
-object AiSecretPolicy{fun action(v:CharArray?,clear:Boolean)=when{clear->SecretUpdate.CLEAR;v.isNullOrEmpty()->SecretUpdate.KEEP;else->SecretUpdate.REPLACE}}
+object AiSecretPolicy{fun action(v:CharArray?,clear:Boolean)=when{clear->SecretUpdate.CLEAR;v==null||v.isEmpty()->SecretUpdate.KEEP;else->SecretUpdate.REPLACE}}
 interface AiSecretStore{fun put(providerId:String,secret:CharArray);fun get(providerId:String):CharArray?;fun clear(providerId:String);fun exists(providerId:String):Boolean{val s=get(providerId)?:return false;s.fill('\u0000');return true};fun put(secret:CharArray)=put(LEGACY_KEY,secret);fun get()=get(LEGACY_KEY);fun clear()=clear(LEGACY_KEY);fun exists()=exists(LEGACY_KEY);companion object{const val LEGACY_KEY="legacy"}}
 class AndroidAiSecretStore(context:Context):AiSecretStore{
  private val prefs=context.applicationContext.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
