@@ -18,9 +18,9 @@ interface AiCompletionClient {
     suspend fun complete(config: AiConfig, apiKey: CharArray, userPrompt: String): String
 }
 
-class AiModelsClient(private val client: OkHttpClient = OkHttpAiCompletionClient.secureClient()) {
+class AiModelsClient(private val client: OkHttpClient = OkHttpAiCompletionClient.secureClient(), private val validate: (String) -> Result<AiEndpoint> = AiEndpointValidator::validate) {
     suspend fun fetch(provider: AiProviderEntity, apiKey: CharArray): List<String> {
-        val url = AiEndpointValidator.validate(AiEndpointResolver.modelsEndpoint(provider.baseUrl.ifBlank { provider.endpoint }, provider.appendV1)).getOrElse { throw AiClientException("端点配置无效") }
+        val url = validate(AiEndpointResolver.modelsEndpoint(provider.baseUrl.ifBlank { provider.endpoint }, provider.appendV1)).getOrElse { throw AiClientException("端点配置无效") }
         val key = apiKey.concatToString()
         val request = try { Request.Builder().url(url.url).header("Authorization", "Bearer $key").header("Accept", "application/json").get().build() } finally { apiKey.fill('\u0000') }
         val response = try { client.newCall(request).await() } catch (_: IOException) { throw AiClientException("网络请求失败或超时") }
@@ -44,10 +44,11 @@ class RefreshProviderModelsUseCase(private val client: AiModelsClient = AiModels
 
 class OkHttpAiCompletionClient(
     private val client: OkHttpClient = secureClient(),
+    private val validate: (String) -> Result<AiEndpoint> = AiEndpointValidator::validate,
 ) : AiCompletionClient {
     override suspend fun complete(config: AiConfig, apiKey: CharArray, userPrompt: String): String {
         require(userPrompt.length <= AI_MAX_CHARS) { "请求内容超过 50000 字符" }
-        val endpoint = AiEndpointValidator.validate(config.endpoint).getOrElse { throw AiClientException("端点配置无效") }
+        val endpoint = validate(config.endpoint).getOrElse { throw AiClientException("端点配置无效") }
         require(config.model.isNotBlank()) { "模型未配置" }
         val keyString = apiKey.concatToString()
         val json = when (config.apiMode) {
