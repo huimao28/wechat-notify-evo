@@ -24,6 +24,18 @@ class AiClientMockWebServerTest {
    val responses=server.takeRequest();val body=responses.body!!.utf8();assertTrue(body.contains("\"stream\":false"));assertTrue(body.contains("\"input\":\"hello\""))
   } finally { server.close() }
  }
+ @Test fun draftQuickTestPayloadContainsOnlyFixedPingNotChat() = runBlocking {
+  val (server,http)=server()
+  try {
+   server.enqueue(MockResponse.Builder().body("{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}").build())
+   val client=OkHttpAiCompletionClient(http) { Result.success(AiEndpoint(it,"localhost")) }
+   assertEquals("ok",client.complete(AiConfig(endpoint=server.url("/v1/chat/completions").toString(),model="draft"),"temporary".toCharArray(),ProviderQuickTestPolicy.PROMPT))
+   val body=server.takeRequest().body!!.utf8()
+   assertTrue(body.contains("\"content\":\"ping\""))
+   assertFalse(body.contains("conversation",ignoreCase=true))
+   assertFalse(body.contains("聊天"))
+  } finally { server.close() }
+ }
  @Test fun modelsGetParsesIds() = runBlocking {
   val (server,http)=server()
   try {

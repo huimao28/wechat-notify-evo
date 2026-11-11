@@ -91,13 +91,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun applyProviderConfig(providerConfig: AiProviderConfig, message: String? = null) {
-        val selected = providerConfig.selected(mutableState.value.selectedProviderId)
-        val config = selected?.let(::AiConfig) ?: AiConfig()
-        mutableState.update { old -> old.copy(
-            config = config, providers = providerConfig.providers, selectedProviderId = selected?.id,
-            providerOperationRunning = false, providerOperationMessage = message, providerOperationError = false,
-            phase = when { !config.configured -> AiPhase.ConfigMissing; old.selectedIds.isEmpty() -> AiPhase.Selecting; else -> old.phase },
-        ) }
+        mutableState.update { ProviderUiReducer.loaded(it, providerConfig, message) }
     }
 
     fun saveConfig(endpoint: String, model: String, apiKey: CharArray) {
@@ -195,7 +189,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                         AiConfig(p).copy(model = model.modelId, modelEntryId = model.id)
                     }
                 }
-                client.complete(config, requireNotNull(key), "ping")
+                client.complete(config, requireNotNull(key), ProviderQuickTestPolicy.PROMPT)
                 mutableState.update { it.copy(testStatus = "连接成功（响应正文未保存）") }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 mutableState.update { it.copy(testStatus = "测试已取消") }; throw cancelled

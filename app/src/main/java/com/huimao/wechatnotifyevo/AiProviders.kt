@@ -48,7 +48,7 @@ data class AiProvider(val entity:AiProviderEntity,val hasApiKey:Boolean,val mode
  @Query("DELETE FROM ai_provider_models WHERE id=:id") fun deleteModel(id:String)
  @Query("SELECT * FROM ai_settings WHERE singleton=1") fun settings():AiSettingsEntity?
  @Insert(onConflict=OnConflictStrategy.REPLACE) fun settings(value:AiSettingsEntity)
- @Transaction fun deleteAndFallback(id:String){delete(id);val s=settings();if(s?.defaultProviderId==id){val p=all().firstOrNull{it.enabled};settings(AiSettingsEntity(defaultProviderId=p?.id,defaultModelEntryId=p?.let{models(it.id).firstOrNull{m->m.enabled}?.id}))}}
+ @Transaction fun deleteAndFallback(id:String){delete(id);val s=settings();if(s?.defaultProviderId==id){val nextId=ProviderFallbackPolicy.providerAfterRemoval(all(),id);settings(AiSettingsEntity(defaultProviderId=nextId,defaultModelEntryId=nextId?.let{ProviderFallbackPolicy.modelAfterRemoval(models(it),"")}))}}
 }
 @Database(entities=[AiProviderEntity::class,AiProviderModelEntry::class,AiSettingsEntity::class],version=2,exportSchema=true)
 @TypeConverters(AiProviderConverters::class) abstract class AiProviderDatabase:RoomDatabase(){abstract fun dao():AiProviderDao
