@@ -101,5 +101,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
     ksp("androidx.room:room-compiler:2.8.5")
     testImplementation("com.squareup.okhttp3:mockwebserver3:5.3.2")
+    testImplementation("com.squareup.okhttp3:okhttp-tls:5.3.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

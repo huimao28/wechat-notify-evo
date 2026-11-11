@@ -204,10 +204,10 @@ fun AiSettingsCard(state: AiUiState, actions: AiProviderActions) {
     fun entityFromDraft(): AiProviderEntity {
         val now = System.currentTimeMillis()
         return (selected?.entity ?: AiProviderEntity(
-            displayName = editor.name, baseUrl = "", endpoint = editor.endpoint,
+            displayName = editor.name, baseUrl = editor.endpoint.substringBefore("/chat/completions").substringBefore("/responses").removeSuffix("/v1"), endpoint = editor.endpoint,
             modelId = editor.model, createdAt = now, updatedAt = now,
             sortOrder = state.providers.size,
-        )).copy(displayName = editor.name, endpoint = editor.endpoint, modelId = editor.model)
+        )).copy(displayName = editor.name, baseUrl = editor.endpoint.substringBefore("/chat/completions").substringBefore("/responses").removeSuffix("/v1"), endpoint = editor.endpoint, modelId = editor.model)
     }
     fun save(makeDefault: Boolean) {
         val submitted = key.toCharArray()

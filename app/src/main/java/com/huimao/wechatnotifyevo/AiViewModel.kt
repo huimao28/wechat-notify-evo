@@ -57,6 +57,21 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         AiProviderStore.save(app, provider.entity, null, clearKey = true, s = secrets).getOrThrow()
     }
 
+    fun addProviderModel(providerId: String, modelId: String, alias: String?) = providerWrite("模型已添加") { AiProviderStore.addModel(app, providerId, modelId, alias, s = secrets) }
+    fun deleteProviderModel(id: String) = providerWrite("模型已删除") { AiProviderStore.deleteModel(app, id, secrets) }
+    fun setDefaultModel(providerId: String, entryId: String) = providerWrite("默认模型已更新") { AiProviderStore.setDefaultModel(app, providerId, entryId, secrets) }
+    fun refreshProviderModels(providerId: String) = providerWriteSuspend("模型列表已刷新") { AiProviderStore.refreshModels(app, providerId, secrets) }
+
+    private fun providerWriteSuspend(success: String, block: suspend () -> AiProviderConfig) {
+        if (mutableState.value.providerOperationRunning) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(providerOperationRunning = true, providerOperationMessage = null, providerOperationError = false) }
+            runCatching { withContext(Dispatchers.IO) { block() } }
+                .onSuccess { applyProviderConfig(it, success) }
+                .onFailure { error -> mutableState.update { it.copy(providerOperationRunning = false, providerOperationMessage = ProviderOperationPolicy.safeFailureMessage(error), providerOperationError = true) } }
+        }
+    }
+
     private fun providerRead(block: () -> AiProviderConfig) {
         viewModelScope.launch {
             runCatching { withContext(Dispatchers.IO) { block() } }
@@ -76,13 +91,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun applyProviderConfig(providerConfig: AiProviderConfig, message: String? = null) {
-        val selected = providerConfig.selected(mutableState.value.selectedProviderId)
-        val config = selected?.let(::AiConfig) ?: AiConfig()
-        mutableState.update { old -> old.copy(
-            config = config, providers = providerConfig.providers, selectedProviderId = selected?.id,
-            providerOperationRunning = false, providerOperationMessage = message, providerOperationError = false,
-            phase = when { !config.configured -> AiPhase.ConfigMissing; old.selectedIds.isEmpty() -> AiPhase.Selecting; else -> old.phase },
-        ) }
+        mutableState.update { ProviderUiReducer.loaded(it, providerConfig, message) }
     }
 
     fun saveConfig(endpoint: String, model: String, apiKey: CharArray) {
@@ -159,6 +168,35 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 val safe = (error as? AiClientException)?.safeMessage ?: "请求失败"
                 mutableState.update { it.copy(phase = AiPhase.Error(safe)) }
             }
+        }
+    }
+
+    fun quickTest(providerId: String?, modelEntryId: String?, draft: AiProviderEntity?, temporaryKey: CharArray) {
+        if (requestJob?.isActive == true) { temporaryKey.fill('\u0000'); return }
+        val ownedKey = temporaryKey.copyOf(); temporaryKey.fill('\u0000')
+        requestJob = viewModelScope.launch {
+            mutableState.update { it.copy(testStatus = "测试中…") }
+            var key: CharArray? = null
+            try {
+                val config = withContext(Dispatchers.IO) {
+                    if (draft != null) {
+                        key = ownedKey
+                        AiConfig(endpoint = AiEndpointResolver.resolve(draft.baseUrl, draft.appendV1, draft.apiMode), model = draft.modelId, hasApiKey = true, providerName = draft.displayName, apiMode = draft.apiMode)
+                    } else {
+                        val p = AiProviderStore.load(app, secrets).providers.firstOrNull { it.id == providerId } ?: error("Provider 不存在")
+                        val model = p.models.firstOrNull { it.id == modelEntryId } ?: p.defaultModel ?: error("模型未配置")
+                        key = secrets.get(p.id) ?: error("API Key 未配置")
+                        AiConfig(p).copy(model = model.modelId, modelEntryId = model.id)
+                    }
+                }
+                client.complete(config, requireNotNull(key), ProviderQuickTestPolicy.PROMPT)
+                mutableState.update { it.copy(testStatus = "连接成功（响应正文未保存）") }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                mutableState.update { it.copy(testStatus = "测试已取消") }; throw cancelled
+            } catch (error: Throwable) {
+                val safe = (error as? AiClientException)?.safeMessage ?: when { error.message?.contains("Key") == true -> "凭据未配置"; else -> "配置或网络错误" }
+                mutableState.update { it.copy(testStatus = "连接失败：$safe") }
+            } finally { key?.fill('\u0000'); ownedKey.fill('\u0000') }
         }
     }
 

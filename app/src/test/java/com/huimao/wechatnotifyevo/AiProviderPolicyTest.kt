@@ -16,7 +16,7 @@ class AiProviderPolicyTest {
     }
 
     @Test fun officialPresetsAreExactAndHttps() {
-        assertEquals("https://api.openai.com/v1/chat/completions", AiProviderPreset.OPENAI.endpoint)
+        assertEquals("https://api.openai.com/v1/responses", AiProviderPreset.OPENAI.endpoint)
         assertEquals("https://api.deepseek.com/chat/completions", AiProviderPreset.DEEPSEEK.endpoint)
         assertEquals("https://openrouter.ai/api/v1/chat/completions", AiProviderPreset.OPENROUTER.endpoint)
         AiProviderPreset.entries.filter { it != AiProviderPreset.CUSTOM }

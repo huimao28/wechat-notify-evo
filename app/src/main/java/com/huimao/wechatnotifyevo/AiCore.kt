@@ -84,6 +84,52 @@ object AiJson {
             "\"messages\":[{\"role\":\"system\",\"content\":\"${escape(system)}\"}," +
             "{\"role\":\"user\",\"content\":\"${escape(user)}\"}]}"
 
+    fun responsesRequest(model: String, system: String, user: String): String =
+        "{\"model\":\"${escape(model)}\",\"stream\":false,\"instructions\":\"${escape(system)}\"," +
+            "\"input\":\"${escape(user)}\"}"
+
+    fun responsesContent(json: String): String {
+        val output = json.indexOf("\"output\"")
+        val directKey = json.indexOf("\"output_text\"")
+        val direct = if (directKey >= 0 && (output < 0 || directKey < output)) stringValue(json, "output_text", directKey) else null
+        if (!direct.isNullOrBlank()) return direct
+        var from = output
+        require(from >= 0) { "响应缺少 output" }
+        val parts = mutableListOf<String>()
+        while (true) {
+            val key = json.indexOf("\"text\"", from)
+            if (key < 0) break
+            val text = stringValue(json, "text", key)
+            if (!text.isNullOrBlank()) parts += text
+            from = key + 6
+        }
+        return parts.joinToString("\n").takeIf { it.isNotBlank() } ?: error("响应缺少文本")
+    }
+
+    fun modelIds(json: String): List<String> {
+        val data = json.indexOf("\"data\"")
+        require(data >= 0) { "响应缺少 data" }
+        val result = mutableListOf<String>()
+        var from = data
+        while (true) {
+            val key = json.indexOf("\"id\"", from)
+            if (key < 0) break
+            stringValue(json, "id", key)?.trim()?.takeIf { it.isNotEmpty() }?.let(result::add)
+            from = key + 4
+        }
+        return result.distinct()
+    }
+
+    private fun stringValue(json: String, keyName: String, start: Int): String? {
+        val key = json.indexOf("\"$keyName\"", start); if (key < 0) return null
+        var i = json.indexOf(':', key) + 1; while (i > 0 && i < json.length && json[i].isWhitespace()) i++
+        if (i <= 0 || i >= json.length || json[i] != '"') return null
+        i++; val out = StringBuilder()
+        while (i < json.length) { val c=json[i++]; if(c=='"') return out.toString(); if(c!='\\'){out.append(c);continue}; if(i>=json.length)return null
+            when(val e=json[i++]){'"','\\','/'->out.append(e);'b'->out.append('\b');'f'->out.append('\u000C');'n'->out.append('\n');'r'->out.append('\r');'t'->out.append('\t');'u'->{if(i+4>json.length)return null;out.append(json.substring(i,i+4).toInt(16).toChar());i+=4};else->return null}}
+        return null
+    }
+
     /** Small strict parser for choices[0].message.content; decodes JSON string escapes. */
     fun responseContent(json: String): String {
         val choices = json.indexOf("\"choices\"")
