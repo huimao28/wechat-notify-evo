@@ -104,6 +104,13 @@ shortcut；同时取消当前进化通知而不重发，以避免厂商系统触
 
 以上致谢仅说明灵感、参考与社区帮助，不代表相关作者或贡献者对本项目背书。
 
+## v1.1.0-beta.7 Pre-release：完整 Minis 风格 Provider 重写
+
+- 独立 Provider 列表、创建向导、详情、模型管理与 Quick Test；多 Provider、多模型使用稳定 ID。
+- 支持 OpenAI-compatible Chat Completions 与 Responses API、Base URL、自动追加 `/v1` 和模型刷新。
+- 旧 Provider/API Key 无损幂等迁移；保留 Keystore 加密、GPL/OpenMinis 声明，以及 beta.6 的 Tab 导航与 Key 保存热修复。
+- 真实边界：仅支持 OpenAI-compatible API，不支持 Gemini native、Anthropic native 或 OAuth。
+
 ## v1.1.0-beta.6 Pre-release：Navigation 与 Provider 热修复
 
 - 修复 Navigation 3 切换 Tab 时空 back stack 导致的崩溃。

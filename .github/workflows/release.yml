@@ -36,7 +36,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: 微信通知进化 ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
+          body_path: RELEASE_NOTES.md # beta.7 full Provider rewrite, boundaries, migration and legal notices
           # Hyphenated tags (for example v1.1.0-beta.2) are prereleases and never replace latest.
           # Stable tags remain non-prerelease and are promoted to latest.
           draft: false

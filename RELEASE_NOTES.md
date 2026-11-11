@@ -1,3 +1,29 @@
+# v1.1.0-beta.7
+
+这是完整的 Minis 风格 Provider 重写预发布版，可从 beta.6 直接覆盖安装；beta.6 的 Navigation Tab 崩溃与 Provider/API Key 保存热修复继续保留。
+
+## Provider 重写
+
+- 独立的 Provider 列表、创建向导、详情、模型管理与 Quick Test 页面。
+- 多 Provider、多模型使用稳定 ID，切换、保存与默认选择更可靠。
+- OpenAI-compatible 同时支持 Chat Completions API 与 Responses API。
+- Base URL 可配置，并可选择自动追加 `/v1`；支持主动刷新远端模型列表。
+- 旧单 Provider 配置与 API Key 无损、幂等迁移；Key 继续由 Android Keystore 加密且不回显。
+- 保留 beta.6 的五 Tab Navigation 修复、Room 异步保存状态与 Key 擦除修复。
+
+## 真实支持边界
+
+- 仅支持 **OpenAI-compatible** HTTP API（Chat Completions / Responses）。
+- 不支持 Gemini native API、Anthropic native API 或 OAuth 登录；相关服务仅在提供 OpenAI-compatible 端点时可用。
+
+## 版权与许可
+
+- Provider 配置交互与仓储设计参考并改编自 **OpenMinis**，源码内保留对应声明。
+- 项目代码与 GPL 覆盖材料采用 **GPL-3.0-only**；APK 内含 `LICENSE`、`NOTICE`、`THIRD_PARTY_NOTICES.md`。
+- 微信 launcher 图标/商标素材不按 GPL 授权，权利归腾讯和/或相关权利人，仅用于兼容识别；不声称授权、关联或认可。
+
+---
+
 # v1.1.0-beta.6
 
 这是 v1.1.0-beta.5 的 Navigation 与 Provider/Key 热修复版，支持直接覆盖安装，**包含 beta.5 的全部 Provider、GPL 法律文件与微信 launcher 图标恢复功能**。
