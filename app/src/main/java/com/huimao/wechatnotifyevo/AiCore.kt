@@ -89,9 +89,11 @@ object AiJson {
             "\"input\":\"${escape(user)}\"}"
 
     fun responsesContent(json: String): String {
-        val direct = stringValue(json, "output_text", 0)
+        val output = json.indexOf("\"output\"")
+        val directKey = json.indexOf("\"output_text\"")
+        val direct = if (directKey >= 0 && (output < 0 || directKey < output)) stringValue(json, "output_text", directKey) else null
         if (!direct.isNullOrBlank()) return direct
-        var from = json.indexOf("\"output\"")
+        var from = output
         require(from >= 0) { "响应缺少 output" }
         val parts = mutableListOf<String>()
         while (true) {
