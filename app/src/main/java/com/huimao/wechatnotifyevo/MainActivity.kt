@@ -112,15 +112,15 @@ private fun AppContent(
                         privacyContent = {
                             HistoryPrivacySettingsCard(historyState, historyViewModel::setRecordingEnabled, historyViewModel::setRetention, historyViewModel::saveExcluded, historyViewModel::clearAll)
                         },
-                        aiContent = {
-                            AiSettingsCard(aiState, AiProviderActions(
-                                aiViewModel::saveProvider, aiViewModel::deleteProvider, aiViewModel::setDefaultProvider,
-                                aiViewModel::setProviderEnabled, aiViewModel::clearProviderKey, aiViewModel::testConnection,
-                            ))
-                        },
+                        aiContent = { ProviderSettingsSummary(aiState) { openDetail(ProviderListRoute) } },
                     )
                 }
                 entry<DiagnosticsRouteKey> { DiagnosticsRoute(onBack = ::navigateBack) }
+                entry<ProviderListRoute> { ProviderListScreen(aiState, ::navigateBack, { openDetail(AddProviderChooseRoute) }, { openDetail(ProviderEditorRoute(it)) }) }
+                entry<AddProviderChooseRoute> { AddProviderChooseScreen(::navigateBack) { openDetail(ProviderEditorRoute(preset = it.name)) } }
+                entry<ProviderEditorRoute> { route -> ProviderEditorScreen(aiState, route.id, route.preset, ProviderEditorActions(aiViewModel::saveProvider, aiViewModel::deleteProvider, aiViewModel::clearProviderKey), ::navigateBack, { openDetail(ProviderModelsRoute(it)) }, { openDetail(ProviderQuickTestRoute(it)) }) }
+                entry<ProviderModelsRoute> { route -> ProviderModelsScreen(aiState, route.providerId, ::navigateBack, aiViewModel::addProviderModel, aiViewModel::deleteProviderModel, aiViewModel::setDefaultModel, aiViewModel::refreshProviderModels) }
+                entry<ProviderQuickTestRoute> { route -> ProviderQuickTestScreen(aiState, route.providerId, route.modelEntryId, ::navigateBack, aiViewModel::quickTest, aiViewModel::cancel) }
                 entry<AboutRoute> { AboutScreen() }
             },
         )

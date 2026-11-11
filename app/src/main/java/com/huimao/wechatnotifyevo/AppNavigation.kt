@@ -21,6 +21,11 @@ data object SettingsRouteKey : AppRoute
 data object AboutRoute : AppRoute
 data object DiagnosticsRouteKey : AppRoute
 data class HistoryDetailRoute(val stableId: String) : AppRoute
+data object ProviderListRoute : AppRoute
+data object AddProviderChooseRoute : AppRoute
+data class ProviderEditorRoute(val id: String? = null, val preset: String? = null) : AppRoute
+data class ProviderModelsRoute(val providerId: String) : AppRoute
+data class ProviderQuickTestRoute(val providerId: String? = null, val modelEntryId: String? = null) : AppRoute
 
 enum class TopLevelTab(val route: AppRoute, val label: String) {
     HOME(HomeRoute, "首页"),
@@ -35,11 +40,19 @@ object AppRouteSavePolicy {
         HomeRoute -> "home"; HistoryRoute -> "history"; AiRoute -> "ai"
         SettingsRouteKey -> "settings"; AboutRoute -> "about"; DiagnosticsRouteKey -> "diagnostics"
         is HistoryDetailRoute -> "history-detail:${route.stableId}"
+        ProviderListRoute -> "providers"; AddProviderChooseRoute -> "provider-add"
+        is ProviderEditorRoute -> "provider-edit:${route.id.orEmpty()}:${route.preset.orEmpty()}"
+        is ProviderModelsRoute -> "provider-models:${route.providerId}"
+        is ProviderQuickTestRoute -> "provider-test:${route.providerId.orEmpty()}:${route.modelEntryId.orEmpty()}"
     }
     fun decode(value: String): AppRoute? = when {
         value == "home" -> HomeRoute; value == "history" -> HistoryRoute; value == "ai" -> AiRoute
         value == "settings" -> SettingsRouteKey; value == "about" -> AboutRoute; value == "diagnostics" -> DiagnosticsRouteKey
         value.startsWith("history-detail:") -> HistoryDetailRoute(value.substringAfter("history-detail:"))
+        value == "providers" -> ProviderListRoute; value == "provider-add" -> AddProviderChooseRoute
+        value.startsWith("provider-edit:") -> value.removePrefix("provider-edit:").split(":", limit=2).let { ProviderEditorRoute(it[0].ifBlank { null }, it.getOrNull(1)?.ifBlank { null }) }
+        value.startsWith("provider-models:") -> ProviderModelsRoute(value.substringAfter("provider-models:"))
+        value.startsWith("provider-test:") -> value.removePrefix("provider-test:").split(":", limit=2).let { ProviderQuickTestRoute(it[0].ifBlank { null }, it.getOrNull(1)?.ifBlank { null }) }
         else -> null
     }
 }
@@ -49,7 +62,7 @@ object TopLevelNavigationPolicy {
         HomeRoute -> TopLevelTab.HOME
         HistoryRoute, is HistoryDetailRoute -> TopLevelTab.HISTORY
         AiRoute -> TopLevelTab.AI
-        SettingsRouteKey, DiagnosticsRouteKey -> TopLevelTab.SETTINGS
+        SettingsRouteKey, DiagnosticsRouteKey, ProviderListRoute, AddProviderChooseRoute, is ProviderEditorRoute, is ProviderModelsRoute, is ProviderQuickTestRoute -> TopLevelTab.SETTINGS
         AboutRoute -> TopLevelTab.ABOUT
     }
 
