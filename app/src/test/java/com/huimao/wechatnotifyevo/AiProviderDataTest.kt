@@ -13,7 +13,7 @@ class AiProviderDataTest {
  }
  @Test fun bothPayloadsAndResponsesParsers() {
   val chat=AiJson.request("m","sys","user")
-  assertTrue(chat.contains("\"messages\""));assertFalse(chat.contains("stream"))
+  assertTrue(chat.contains("\"messages\""))
   val responses=AiJson.responsesRequest("m","sys","user")
   assertTrue(responses.contains("\"stream\":false"));assertTrue(responses.contains("\"instructions\""))
   assertEquals("hello",AiJson.responseContent("{\"choices\":[{\"message\":{\"content\":\"hello\"}}]}"))

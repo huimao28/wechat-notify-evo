@@ -8,7 +8,7 @@ import org.junit.Test
 
 class AiClientMockWebServerTest {
  @Test fun chatAndResponsesRequestsAreComplete() = runBlocking {
-  val server=MockWebServer()
+  val server=MockWebServer().apply { start() }
   try {
    server.enqueue(MockResponse.Builder().body("{\"choices\":[{\"message\":{\"content\":\"chat-ok\"}}]}").build())
    server.enqueue(MockResponse.Builder().body("{\"output\":[{\"content\":[{\"type\":\"output_text\",\"text\":\"response-ok\"}]}]}").build())
@@ -20,7 +20,7 @@ class AiClientMockWebServerTest {
   } finally { server.close() }
  }
  @Test fun modelsGetParsesIds() = runBlocking {
-  val server=MockWebServer()
+  val server=MockWebServer().apply { start() }
   try {
    server.enqueue(MockResponse.Builder().body("{\"data\":[{\"id\":\"m1\"},{\"id\":\"m2\"}]}").build())
    val provider=AiProviderEntity(displayName="p",baseUrl=server.url("/").toString(),createdAt=1,updatedAt=1,sortOrder=0,appendV1=true)
