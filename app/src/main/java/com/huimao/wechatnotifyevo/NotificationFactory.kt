@@ -19,20 +19,8 @@ object NotificationFactory {
     const val CHANNEL_GROUP = "evo_group"
     const val CHANNEL_BOT = "evo_bot"
 
-    const val GROUP_DIRECT = "evo_group_direct"
-    const val GROUP_GROUP = "evo_group_group"
-    const val GROUP_BOT = "evo_group_bot"
-
-    private const val SUMMARY_ID_DIRECT = 900001
-    private const val SUMMARY_ID_GROUP = 900002
-    private const val SUMMARY_ID_BOT = 900003
-
-    /**
-     * A group summary is only posted once the group's total unread count
-     * reaches this threshold; below it, conversations just show on their own
-     * and the summary stays cancelled.
-     */
-    private const val SUMMARY_MIN_UNREAD = 100
+    const val GROUP_UNIFIED = UnifiedConversationFoldingPolicy.GROUP_KEY
+    const val SUMMARY_ID_UNIFIED = UnifiedConversationFoldingPolicy.SUMMARY_ID
 
     private const val WECHAT_GREEN = 0xFF07C160.toInt()
 
@@ -84,17 +72,7 @@ object NotificationFactory {
         return if (nm.getNotificationChannel(id) != null) id else parentId
     }
 
-    fun groupKeyFor(type: ConversationType): String = when (type) {
-        ConversationType.GROUP -> GROUP_GROUP
-        ConversationType.BOT -> GROUP_BOT
-        else -> GROUP_DIRECT
-    }
-
-    fun summaryIdFor(type: ConversationType): Int = when (type) {
-        ConversationType.GROUP -> SUMMARY_ID_GROUP
-        ConversationType.BOT -> SUMMARY_ID_BOT
-        else -> SUMMARY_ID_DIRECT
-    }
+    fun groupKeyFor(type: ConversationType): String = GROUP_UNIFIED
 
     /** Small icon is shared with the status bar; shade rendering is system-controlled. */
     private fun smallIcon(context: Context, conv: Conversation?): Icon {
@@ -124,7 +102,9 @@ object NotificationFactory {
     /** Summary-only fallback; conversation notifications always use WeChat's exact contentIntent. */
     private fun wechatLaunchIntent(context: Context): PendingIntent? {
         val launch = context.packageManager
-            .getLaunchIntentForPackage(WeChatListenerService.WECHAT_PACKAGE) ?: return null
+            .getLaunchIntentForPackage(WeChatListenerService.WECHAT_PACKAGE)
+            ?: context.packageManager.getLaunchIntentForPackage(context.packageName)
+            ?: return null
         return PendingIntent.getActivity(
             context, 0, launch,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -211,7 +191,7 @@ object NotificationFactory {
             .setContentIntent(requireNotNull(conv.contentIntent) { "original WeChat contentIntent is required" })
             .setDeleteIntent(deletePendingIntent(context, conv))
             .setAutoCancel(true)
-            .setGroup(groupKeyFor(conv.type))
+            .setGroup(GROUP_UNIFIED)
             .setStyle(style)
             .setOnlyAlertOnce(silent)
         // Android 11+: link the notification to its conversation shortcut so
@@ -335,31 +315,26 @@ object NotificationFactory {
         return builder.build()
     }
 
-    /**
-     * One summary per group; null when the group has no conversations left
-     * or its total unread count is below [SUMMARY_MIN_UNREAD].
-     */
-    fun buildSummaryNotification(
-        context: Context,
-        type: ConversationType,
-    ): Notification? {
-        val currentUserId = CurrentUserScope.id()
-        val convs = ConversationStore.allForUser(currentUserId).filter { it.type == type }
-        if (convs.isEmpty()) return null
-        val totalUnread = convs.sumOf { conv ->
-            if (conv.lastCounter > 0) conv.lastCounter else conv.messages.size
+    /** A single cross-type summary, present only for four or more active conversations. */
+    fun buildSummaryNotification(context: Context): Notification? {
+        val policy = UnifiedConversationFoldingPolicy.fromConversations(
+            ConversationStore.allForUser(CurrentUserScope.id())
+        )
+        if (!policy.showSummary) return null
+        val count = ConversationStore.allForUser(CurrentUserScope.id()).size
+        val summaryText = "$count 个会话有新消息"
+        val style = Notification.InboxStyle().setBigContentTitle("微信通知进化")
+        policy.entries.forEach { entry ->
+            style.addLine("${entry.title}：${entry.lastMessage}")
         }
-        if (totalUnread < SUMMARY_MIN_UNREAD) return null
-        val style = Notification.InboxStyle().setBigContentTitle("微信")
-        for (conv in convs.take(5)) {
-            val last = conv.messages.lastOrNull()?.text ?: ""
-            style.addLine("${conv.title}：$last")
-        }
-        style.setSummaryText("${convs.size} 个会话有新消息")
-        return Notification.Builder(context, channelFor(type))
+        style.setSummaryText(summaryText)
+        return Notification.Builder(context, CHANNEL_MESSAGE)
             .setSmallIcon(smallIcon(context, null))
             .setColor(WECHAT_GREEN)
-            .setGroup(groupKeyFor(type))
+            .setContentTitle("微信通知进化")
+            .setContentText(summaryText)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setGroup(GROUP_UNIFIED)
             .setGroupSummary(true)
             .setGroupAlertBehavior(Notification.GROUP_ALERT_CHILDREN)
             .setContentIntent(wechatLaunchIntent(context))
@@ -368,4 +343,5 @@ object NotificationFactory {
             .setOnlyAlertOnce(true)
             .build()
     }
+
 }

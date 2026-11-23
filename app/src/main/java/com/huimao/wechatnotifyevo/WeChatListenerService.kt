@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Flow: WeChat posts -> onNotificationPosted -> parse + archive -> cancel the
  * original -> post the evolved MessagingStyle notification under our own
- * package and channels -> maintain one group summary per conversation type.
+ * package and channels -> maintain one summary for all active conversation types.
  */
 class WeChatListenerService : NotificationListenerService() {
     private val ownRemovals = linkedSetOf<Triple<Int, String, Long>>()
@@ -147,17 +147,25 @@ class WeChatListenerService : NotificationListenerService() {
             refreshSummaries(context)
         }
 
-        /** Post or remove the group summary for every conversation type. */
+        /** Post or remove the one cross-type summary from active store state. */
         fun refreshSummaries(context: Context) {
             val nm = notificationManager(context) ?: return
-            for (type in ConversationType.values()) {
-                val summary = NotificationFactory.buildSummaryNotification(context, type)
-                if (summary != null) {
-                    nm.notify(NotificationFactory.summaryIdFor(type), summary)
-                } else {
-                    nm.cancel(NotificationFactory.summaryIdFor(type))
-                }
+            val summary = NotificationFactory.buildSummaryNotification(context)
+            if (summary != null) {
+                nm.notify(NotificationFactory.SUMMARY_ID_UNIFIED, summary)
+            } else {
+                nm.cancel(NotificationFactory.SUMMARY_ID_UNIFIED)
             }
+        }
+
+        /** Migrates old summaries/group keys and restores current children on connection. */
+        fun reconcileNotifications(context: Context) {
+            val nm = notificationManager(context) ?: return
+            UnifiedConversationFoldingPolicy.LEGACY_SUMMARY_IDS.forEach(nm::cancel)
+            ConversationStore.allForUser(CurrentUserScope.id()).forEach { conv ->
+                nm.notify(conv.nid, NotificationFactory.buildConversationNotification(context, conv, true))
+            }
+            refreshSummaries(context)
         }
 
         /** Cancel every evolved notification and drop all archives. */
@@ -170,9 +178,8 @@ class WeChatListenerService : NotificationListenerService() {
                 nm.cancel(conv.nid)
             }
             ConversationShortcuts.removeAll(context, allConvs)
-            for (type in ConversationType.values()) {
-                nm.cancel(NotificationFactory.summaryIdFor(type))
-            }
+            nm.cancel(NotificationFactory.SUMMARY_ID_UNIFIED)
+            UnifiedConversationFoldingPolicy.LEGACY_SUMMARY_IDS.forEach(nm::cancel)
             ConversationStore.clear()
         }
     }
@@ -183,6 +190,7 @@ class WeChatListenerService : NotificationListenerService() {
         val staleUsers = ConversationStore.removeOtherUsers(CurrentUserScope.id())
         ConversationShortcuts.removeAll(this, staleUsers)
         ConversationShortcuts.pruneOrphans(this)
+        reconcileNotifications(this)
         // A listener connection is system-originated; all optional restoration
         // still goes through the coordinator and remains preference-gated.
         KeepAliveCoordinator.restoreIfEnabled(this)
