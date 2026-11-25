@@ -16,23 +16,19 @@ object WeChatCallNotificationBridge {
     private const val CHANNEL_ID = "wechat_calls_v1"
     private const val CHANNEL_NAME = "微信来电"
     private const val TAG = "WNE.CallStyle"
-    private const val ID_BASE = 0x5ca11000
+    private const val CALL_NOTIFICATION_ID = 0x5ca11001
     private const val DIAGNOSTIC_ID = 0x5ca11fff
-    private val activeKeys = linkedSetOf<String>()
 
-    fun notificationId(key: String): Int = ID_BASE xor key.hashCode()
+    fun notificationId(@Suppress("UNUSED_PARAMETER") key: String): Int = CALL_NOTIFICATION_ID
 
-    @Synchronized
-    fun cancel(context: Context, key: String) {
-        activeKeys.remove(key)
-        context.getSystemService(NotificationManager::class.java)?.cancel(notificationId(key))
+    fun cancel(context: Context, @Suppress("UNUSED_PARAMETER") key: String = "") {
+        context.getSystemService(NotificationManager::class.java)?.cancel(CALL_NOTIFICATION_ID)
     }
 
-    @Synchronized
     fun cancelAll(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
-        activeKeys.forEach { nm.cancel(notificationId(it)) }
-        activeKeys.clear()
+        nm.cancel(CALL_NOTIFICATION_ID)
+        nm.cancel(DIAGNOSTIC_ID)
     }
 
     @Suppress("DEPRECATION")
@@ -120,11 +116,11 @@ object WeChatCallNotificationBridge {
         // authoritative lock-screen/full-screen entry point.
         val manager = context.getSystemService(NotificationManager::class.java) ?: return false
         val posted = runCatching {
-            manager.notify(notificationId(sbn.key), builder.build())
+            manager.notify(CALL_NOTIFICATION_ID, builder.build())
             true
         }.onFailure { Log.w(TAG, "Failed to publish CallStyle mirror", it) }.getOrDefault(false)
         if (!posted) return false
-        synchronized(this) { activeKeys.add(sbn.key) }
+        manager.cancel(DIAGNOSTIC_ID)
         Log.i(TAG, "Published ${decision.phase} CallStyle for key=${sbn.key}")
         return true
     }

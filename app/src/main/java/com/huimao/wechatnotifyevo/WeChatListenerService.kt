@@ -188,18 +188,30 @@ class WeChatListenerService : NotificationListenerService() {
         }
     }
 
-    private fun reconcileCurrentCalls(): Int {
-        val current = runCatching { activeNotifications?.toList().orEmpty() }
+    private fun reconcileCurrentCalls(extra: StatusBarNotification? = null): Int {
+        val snapshot = runCatching { activeNotifications?.toList().orEmpty() }
             .getOrDefault(emptyList())
             .filter { it.packageName == WECHAT_PACKAGE }
-        current.forEach { active ->
-            if (WeChatCallNotificationBridge.mirrorIfSupported(this, active) &&
-                active.notification.category == Notification.CATEGORY_CALL
-            ) {
-                replaceOriginal(active)
-            }
+            .toMutableList()
+        if (extra != null && snapshot.none { it.key == extra.key }) snapshot += extra
+
+        // WeChat exposes one logical call as two notifications. Always prefer the
+        // category=call ringing card (observed id=41); only when it is absent use
+        // the low-priority "通话中" lifecycle card (observed id=40).
+        val ringing = snapshot.firstOrNull { it.notification.category == Notification.CATEGORY_CALL }
+        val ongoing = snapshot.firstOrNull { item ->
+            val text = item.notification.extras
+                ?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+            text.contains("通话中")
         }
-        return current.size
+        val selected = ringing ?: ongoing
+        if (selected == null) {
+            WeChatCallNotificationBridge.cancel(this)
+            return snapshot.size
+        }
+        val posted = WeChatCallNotificationBridge.mirrorIfSupported(this, selected)
+        if (posted && ringing != null) replaceOriginal(ringing)
+        return snapshot.size
     }
 
     override fun onListenerConnected() {
@@ -246,22 +258,12 @@ class WeChatListenerService : NotificationListenerService() {
             InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.DISABLED)
             return
         }
-        // Calls are mirrored, never replaced: WeChat remains the authoritative
-        // ringing/media owner and its original notification is the safety fallback.
-        if (WeChatCallNotificationBridge.mirrorIfSupported(this, sbn)) {
-            // Replace only the high-priority ringing card after our CallStyle was
-            // posted successfully. Keep WeChat's low-priority ongoing notification
-            // as the authoritative call-lifecycle signal.
-            if (n.category == Notification.CATEGORY_CALL) replaceOriginal(sbn)
-            return
-        }
         val callTitle = n.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val callBody = (n.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
             ?: n.extras?.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
         val callText = "$callTitle $callBody"
-        if (WeChatCallPolicy.looksLikeCallText(callText)) {
-            // This WeChat build exposes no public answer/decline PendingIntents.
-            // Preserve its ordinary notification and never archive it as a chat message.
+        if (n.category == Notification.CATEGORY_CALL || WeChatCallPolicy.looksLikeCallText(callText)) {
+            reconcileCurrentCalls(sbn)
             InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.ONGOING)
             return
         }
@@ -433,7 +435,11 @@ class WeChatListenerService : NotificationListenerService() {
         // Our own replacement cancellation must not remove the CallStyle mirror.
         val own = ownRemovals.remove(Triple(sbn.userId, sbn.key, sbn.postTime))
         if (own && reason == REASON_LISTENER_CANCEL) return
-        WeChatCallNotificationBridge.cancel(this, sbn.key)
+        val removedWasCall = sbn.notification.category == Notification.CATEGORY_CALL ||
+            WeChatCallPolicy.looksLikeCallText(
+                sbn.notification.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+            )
+        if (removedWasCall) reconcileCurrentCalls()
         // WeChat itself removed the notification (read in-app, clicked, or
         // otherwise dismissed): drop our evolved copy too.
         val conv = ConversationStore.get(sbn.id, sourceUserId) ?: return
