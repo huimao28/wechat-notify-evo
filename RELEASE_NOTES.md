@@ -1,6 +1,6 @@
-# v1.1.0-beta.8
+# v1.1.0-beta.9
 
-这是统一会话折叠策略预发布版，**包含 v1.1.0-beta.7 的全部 Provider 重写及此前功能**，可直接覆盖安装。
+这是统一会话折叠与微信 CallStyle 的组合预发布版，可从 beta.8 直接覆盖安装。
 
 ## 统一会话折叠
 
@@ -14,7 +14,22 @@
 ## 完整继承 beta.7
 
 - 完整保留 Minis 风格多 Provider、OpenAI-compatible Chat Completions/Responses、模型刷新、Keystore Key 保护及幂等迁移。
-- 完整保留 beta.7 及之前版本全部功能、修复、许可与隐私边界。
+- 完整保留 beta.8 及之前版本全部功能、修复、许可与隐私边界。
+
+## 类原生系统通话通知
+
+- Android 12 及以上识别微信来电后，使用公开的 `Notification.CallStyle` 发布系统标准来电通知。
+- 支持来电阶段的接听/拒绝，以及通话阶段的挂断样式；按钮仅转发微信原通知公开提供的 `PendingIntent`。
+- 识别标准 CallStyle 字段、通话类别、公开操作按钮、通话渠道与微信来电文本。
+- 微信原始来电通知始终保留，代理操作不完整或发布失败时安全放行，不影响原生接听入口。
+- 微信通知结束时同步撤销 CallStyle；监听器断开时清理残留通话通知。
+- 不接管微信媒体、麦克风或音频路由，也不注册虚假的 Telecom 通话。
+
+## 实验边界
+
+- 微信不同版本可能不公开接听、拒绝或挂断 `PendingIntent`；字段不完整时不会显示代理 CallStyle。
+- 实际视觉由 Pixel/AOSP SystemUI 与 Android 版本决定。
+- 本版本不代替微信全屏来电界面，也不申请 `USE_FULL_SCREEN_INTENT`。
 
 ---
 

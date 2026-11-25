@@ -180,6 +180,7 @@ class WeChatListenerService : NotificationListenerService() {
             ConversationShortcuts.removeAll(context, allConvs)
             nm.cancel(NotificationFactory.SUMMARY_ID_UNIFIED)
             UnifiedConversationFoldingPolicy.LEGACY_SUMMARY_IDS.forEach(nm::cancel)
+            WeChatCallNotificationBridge.cancelAll(context)
             ConversationStore.clear()
         }
     }
@@ -219,6 +220,11 @@ class WeChatListenerService : NotificationListenerService() {
         logCreatorUser(sourceUserId, n)
         if (!Prefs.isEnabled(this)) {
             InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.DISABLED)
+            return
+        }
+        // Calls are mirrored, never replaced: WeChat remains the authoritative
+        // ringing/media owner and its original notification is the safety fallback.
+        if (WeChatCallNotificationBridge.mirrorIfSupported(this, sbn)) {
             return
         }
         // Android Auto and phone taps must use WeChat's exact public entry.
@@ -386,6 +392,7 @@ class WeChatListenerService : NotificationListenerService() {
         if (sbn == null || sbn.packageName != WECHAT_PACKAGE) return
         val sourceUserId = sourceUserForProcessing(sbn) ?: return
         logCreatorUser(sourceUserId, sbn.notification)
+        WeChatCallNotificationBridge.cancel(this, sbn.key)
         // Our own cancelNotification() calls also arrive here; they must not
         // wipe the archive we just built the evolved notification from.
         val own = ownRemovals.remove(Triple(sbn.userId, sbn.key, sbn.postTime))
