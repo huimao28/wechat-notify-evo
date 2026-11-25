@@ -227,12 +227,10 @@ class WeChatListenerService : NotificationListenerService() {
         if (WeChatCallNotificationBridge.mirrorIfSupported(this, sbn)) {
             return
         }
-        val callText = buildString {
-            append(n.extras?.getCharSequence(Notification.EXTRA_TITLE).orEmpty())
-            append(' ')
-            append(n.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
-                ?: n.extras?.getCharSequence(Notification.EXTRA_TEXT).orEmpty())
-        }
+        val callTitle = n.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val callBody = (n.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
+            ?: n.extras?.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
+        val callText = "$callTitle $callBody"
         if (WeChatCallPolicy.looksLikeCallText(callText)) {
             // This WeChat build exposes no public answer/decline PendingIntents.
             // Preserve its ordinary notification and never archive it as a chat message.
