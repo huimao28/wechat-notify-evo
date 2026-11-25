@@ -1,3 +1,10 @@
+# v1.1.0-beta.10
+
+- 修复微信来电操作只有图标、没有按钮文字时无法识别的问题：现按 Android `ANSWER_CALL`、`DECLINE_CALL`、`HANGUP_CALL` 语义动作提取。
+- 增强 CallStyle 操作缺失诊断日志。
+
+---
+
 # v1.1.0-beta.9
 
 这是统一会话折叠与微信 CallStyle 的组合预发布版，可从 beta.8 直接覆盖安装。

@@ -6,6 +6,7 @@ data class CallActionCandidate(
     val index: Int,
     val label: String,
     val hasIntent: Boolean,
+    val semanticAction: Int = 0,
 )
 
 data class WeChatCallDecision(
@@ -34,12 +35,17 @@ object WeChatCallPolicy {
         titleAndText: String,
         actions: List<CallActionCandidate>,
     ): WeChatCallDecision? {
-        fun action(words: List<String>) = actions.firstOrNull { candidate ->
-            candidate.hasIntent && words.any { candidate.label.contains(it, ignoreCase = true) }
+        fun action(words: List<String>, semantic: Int) = actions.firstOrNull { candidate ->
+            candidate.hasIntent && (
+                candidate.semanticAction == semantic ||
+                    words.any { candidate.label.contains(it, ignoreCase = true) }
+                )
         }
-        val answer = action(answerWords)
-        val decline = action(declineWords)
-        val hangUp = action(hangUpWords)
+        // Notification.Action semantic values are stable public API values:
+        // ANSWER_CALL=10, DECLINE_CALL=11, HANGUP_CALL=12.
+        val answer = action(answerWords, 10)
+        val decline = action(declineWords, 11)
+        val hangUp = action(hangUpWords, 12)
         val lowerChannel = channelId.lowercase()
         val active = hasHangUpExtra || hangUp != null || activeWords.any { titleAndText.contains(it, true) }
         val incoming = hasAnswerExtra || hasDeclineExtra || answer != null || decline != null ||

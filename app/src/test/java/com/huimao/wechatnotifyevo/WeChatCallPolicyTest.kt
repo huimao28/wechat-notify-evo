@@ -27,6 +27,18 @@ class WeChatCallPolicyTest {
         assertEquals(2, result?.hangUpIndex)
     }
 
+    @Test fun iconOnlySemanticActionsProduceIncomingCall() {
+        val result = decide(
+            actions = listOf(
+                CallActionCandidate(0, "", true, semanticAction = 11),
+                CallActionCandidate(1, "", true, semanticAction = 10),
+            )
+        )
+        assertEquals(WeChatCallPhase.INCOMING, result?.phase)
+        assertEquals(1, result?.answerIndex)
+        assertEquals(0, result?.declineIndex)
+    }
+
     @Test fun ringingTextIsRecognizedAsIncoming() {
         assertEquals(
             WeChatCallPhase.INCOMING,

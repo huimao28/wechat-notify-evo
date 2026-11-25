@@ -40,7 +40,12 @@ object WeChatCallNotificationBridge {
         val extras = source.extras ?: return false
         val actions = source.actions.orEmpty()
         val candidates = actions.mapIndexed { index, action ->
-            CallActionCandidate(index, action.title?.toString().orEmpty(), action.actionIntent != null)
+            CallActionCandidate(
+                index = index,
+                label = action.title?.toString().orEmpty(),
+                hasIntent = action.actionIntent != null,
+                semanticAction = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) action.semanticAction else 0,
+            )
         }
         val template = extras.getString(Notification.EXTRA_TEMPLATE).orEmpty()
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
@@ -69,7 +74,7 @@ object WeChatCallNotificationBridge {
             WeChatCallPhase.INCOMING -> {
                 // Never publish fake controls: both operations must be public intents supplied by WeChat.
                 if (answer == null || decline == null) {
-                    Log.i(TAG, "Call detected but answer/decline PendingIntents are incomplete; original left untouched")
+                    Log.i(TAG, "Call detected but controls incomplete: answer=${answer != null} decline=${decline != null} actions=${candidates.map { \"${it.index}:${it.label}:${it.semanticAction}:${it.hasIntent}\" }} fullScreen=${source.fullScreenIntent != null}; original left untouched")
                     return false
                 }
                 Notification.CallStyle.forIncomingCall(person(source, title), decline, answer)
