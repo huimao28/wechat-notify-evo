@@ -37,6 +37,13 @@ object WeChatCallNotificationBridge {
     @Suppress("DEPRECATION")
     fun mirrorIfSupported(context: Context, sbn: StatusBarNotification): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        return runCatching { mirrorInternal(context, sbn) }
+            .onFailure { Log.e(TAG, "CallStyle mirror failed for key=${sbn.key}", it) }
+            .getOrDefault(false)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun mirrorInternal(context: Context, sbn: StatusBarNotification): Boolean {
         val source = sbn.notification ?: return false
         val extras = source.extras ?: return false
         val actions = source.actions.orEmpty()
@@ -68,6 +75,7 @@ object WeChatCallNotificationBridge {
         ) ?: return false
 
         fun actionIntent(index: Int?): PendingIntent? = index?.let { actions.getOrNull(it)?.actionIntent }
+        ensureChannel(context)
         val realAnswer = answerExtra ?: actionIntent(decision.answerIndex)
         val realDecline = declineExtra ?: actionIntent(decision.declineIndex)
         val hangUp = hangUpExtra ?: actionIntent(decision.hangUpIndex)
@@ -91,7 +99,6 @@ object WeChatCallNotificationBridge {
             }
         }
 
-        ensureChannel(context)
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.huimao.wechatnotifyevo.R.drawable.ic_stat_wechat)
             .setCategory(Notification.CATEGORY_CALL)
@@ -145,12 +152,17 @@ object WeChatCallNotificationBridge {
             @Suppress("DEPRECATION") source.extras?.getParcelable("android.callPerson")
         }
         if (sourcePerson != null) return sourcePerson
-        val icon = source.getLargeIcon() ?: source.smallIcon
-        return Person.Builder()
+        val builder = Person.Builder()
             .setName(fallbackName.ifBlank { "微信联系人" })
-            .setIcon(icon)
             .setImportant(true)
-            .build()
+        // A resource Icon owned by com.tencent.mm cannot safely be rebuilt by our
+        // package. Only copy a bitmap/data/URI large icon; otherwise omit it.
+        source.getLargeIcon()?.let { icon ->
+            if (icon.type != android.graphics.drawable.Icon.TYPE_RESOURCE) {
+                builder.setIcon(icon)
+            }
+        }
+        return builder.build()
     }
 
     private fun ensureChannel(context: Context) {

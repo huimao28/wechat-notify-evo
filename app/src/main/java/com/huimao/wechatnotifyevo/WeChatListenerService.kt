@@ -199,7 +199,13 @@ class WeChatListenerService : NotificationListenerService() {
             .getOrDefault(emptyList())
             .asSequence()
             .filter { it.packageName == WECHAT_PACKAGE }
-            .forEach { WeChatCallNotificationBridge.mirrorIfSupported(this, it) }
+            .forEach { active ->
+                if (WeChatCallNotificationBridge.mirrorIfSupported(this, active) &&
+                    active.notification.category == Notification.CATEGORY_CALL
+                ) {
+                    replaceOriginal(active)
+                }
+            }
         // A listener connection is system-originated; all optional restoration
         // still goes through the coordinator and remains preference-gated.
         KeepAliveCoordinator.restoreIfEnabled(this)
@@ -233,6 +239,10 @@ class WeChatListenerService : NotificationListenerService() {
         // Calls are mirrored, never replaced: WeChat remains the authoritative
         // ringing/media owner and its original notification is the safety fallback.
         if (WeChatCallNotificationBridge.mirrorIfSupported(this, sbn)) {
+            // Replace only the high-priority ringing card after our CallStyle was
+            // posted successfully. Keep WeChat's low-priority ongoing notification
+            // as the authoritative call-lifecycle signal.
+            if (n.category == Notification.CATEGORY_CALL) replaceOriginal(sbn)
             return
         }
         val callTitle = n.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
@@ -410,11 +420,10 @@ class WeChatListenerService : NotificationListenerService() {
         if (sbn == null || sbn.packageName != WECHAT_PACKAGE) return
         val sourceUserId = sourceUserForProcessing(sbn) ?: return
         logCreatorUser(sourceUserId, sbn.notification)
-        WeChatCallNotificationBridge.cancel(this, sbn.key)
-        // Our own cancelNotification() calls also arrive here; they must not
-        // wipe the archive we just built the evolved notification from.
+        // Our own replacement cancellation must not remove the CallStyle mirror.
         val own = ownRemovals.remove(Triple(sbn.userId, sbn.key, sbn.postTime))
         if (own && reason == REASON_LISTENER_CANCEL) return
+        WeChatCallNotificationBridge.cancel(this, sbn.key)
         // WeChat itself removed the notification (read in-app, clicked, or
         // otherwise dismissed): drop our evolved copy too.
         val conv = ConversationStore.get(sbn.id, sourceUserId) ?: return
