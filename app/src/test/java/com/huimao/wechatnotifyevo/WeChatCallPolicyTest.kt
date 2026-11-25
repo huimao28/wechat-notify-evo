@@ -54,6 +54,13 @@ class WeChatCallPolicyTest {
         assertEquals(false, WeChatCallPolicy.looksLikeCallText("普通聊天消息"))
     }
 
+    @Test fun fallbackCallTextProducesIncomingDecisionWithoutPublicControls() {
+        val result = decide(text = "huimao [语音通话]")
+        assertEquals(WeChatCallPhase.INCOMING, result?.phase)
+        assertEquals(null, result?.answerIndex)
+        assertEquals(null, result?.declineIndex)
+    }
+
     @Test fun callChannelWithoutControlsIsDetectedForSafeFallback() {
         assertEquals(
             WeChatCallPhase.INCOMING,

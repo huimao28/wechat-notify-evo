@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Person
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -67,19 +68,18 @@ object WeChatCallNotificationBridge {
         ) ?: return false
 
         fun actionIntent(index: Int?): PendingIntent? = index?.let { actions.getOrNull(it)?.actionIntent }
-        val answer = answerExtra ?: actionIntent(decision.answerIndex)
-        val decline = declineExtra ?: actionIntent(decision.declineIndex)
+        val realAnswer = answerExtra ?: actionIntent(decision.answerIndex)
+        val realDecline = declineExtra ?: actionIntent(decision.declineIndex)
         val hangUp = hangUpExtra ?: actionIntent(decision.hangUpIndex)
         val style = when (decision.phase) {
             WeChatCallPhase.INCOMING -> {
-                // Never publish fake controls: both operations must be public intents supplied by WeChat.
-                if (answer == null || decline == null) {
-                    val actionSummary = candidates.joinToString { candidate ->
-                        "${candidate.index}:${candidate.label}:${candidate.semanticAction}:${candidate.hasIntent}"
-                    }
-                    Log.i(TAG, "Call detected but controls incomplete: answer=${answer != null} decline=${decline != null} actions=[$actionSummary] fullScreen=${source.fullScreenIntent != null}; original left untouched")
-                    return false
-                }
+                val answer = realAnswer ?: proxyIntent(
+                    context, sbn, WeChatCallProxyReceiver.ACTION_OPEN_WECHAT_CALL, source.contentIntent
+                )
+                val decline = realDecline ?: proxyIntent(
+                    context, sbn, WeChatCallProxyReceiver.ACTION_DISMISS_MIRROR, null
+                )
+                Log.i(TAG, "Incoming CallStyle controls realAnswer=${realAnswer != null} realDecline=${realDecline != null}")
                 Notification.CallStyle.forIncomingCall(person(source, title), decline, answer)
             }
             WeChatCallPhase.ONGOING -> {
@@ -116,6 +116,26 @@ object WeChatCallNotificationBridge {
         synchronized(this) { activeKeys.add(sbn.key) }
         Log.i(TAG, "Published ${decision.phase} CallStyle for key=${sbn.key}")
         return true
+    }
+
+    private fun proxyIntent(
+        context: Context,
+        sbn: StatusBarNotification,
+        action: String,
+        sourceContentIntent: PendingIntent?,
+    ): PendingIntent {
+        val intent = Intent(context, WeChatCallProxyReceiver::class.java).apply {
+            this.action = action
+            putExtra(WeChatCallProxyReceiver.EXTRA_NOTIFICATION_KEY, sbn.key)
+            putExtra(WeChatCallProxyReceiver.EXTRA_SOURCE_CONTENT_INTENT, sourceContentIntent)
+        }
+        val requestCode = 31 * notificationId(sbn.key) + action.hashCode()
+        return PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun person(source: Notification, fallbackName: String): Person {
