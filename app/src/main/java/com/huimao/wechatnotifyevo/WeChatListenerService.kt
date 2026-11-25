@@ -120,8 +120,11 @@ class WeChatListenerService : NotificationListenerService() {
         const val WECHAT_PACKAGE = "com.tencent.mm"
         private const val TAG = "WNE.UserIsolation"
         private val listenerConnected = AtomicBoolean(false)
+        @Volatile private var liveInstance: WeChatListenerService? = null
 
         fun isListenerConnected(): Boolean = listenerConnected.get()
+
+        fun reconcileActiveCalls(): Int = liveInstance?.reconcileCurrentCalls() ?: -1
 
         private fun notificationManager(context: Context): NotificationManager? =
             context.getSystemService(NotificationManager::class.java)
@@ -185,8 +188,23 @@ class WeChatListenerService : NotificationListenerService() {
         }
     }
 
+    private fun reconcileCurrentCalls(): Int {
+        val current = runCatching { activeNotifications?.toList().orEmpty() }
+            .getOrDefault(emptyList())
+            .filter { it.packageName == WECHAT_PACKAGE }
+        current.forEach { active ->
+            if (WeChatCallNotificationBridge.mirrorIfSupported(this, active) &&
+                active.notification.category == Notification.CATEGORY_CALL
+            ) {
+                replaceOriginal(active)
+            }
+        }
+        return current.size
+    }
+
     override fun onListenerConnected() {
         listenerConnected.set(true)
+        liveInstance = this
         NotificationFactory.ensureChannels(this)
         val staleUsers = ConversationStore.removeOtherUsers(CurrentUserScope.id())
         ConversationShortcuts.removeAll(this, staleUsers)
@@ -195,17 +213,7 @@ class WeChatListenerService : NotificationListenerService() {
         // An app update can reconnect the listener while a WeChat call notification
         // is already active; Android does not replay onNotificationPosted in that case.
         // Reconcile the current snapshot so an ongoing ringing call still gets CallStyle.
-        runCatching { activeNotifications?.toList().orEmpty() }
-            .getOrDefault(emptyList())
-            .asSequence()
-            .filter { it.packageName == WECHAT_PACKAGE }
-            .forEach { active ->
-                if (WeChatCallNotificationBridge.mirrorIfSupported(this, active) &&
-                    active.notification.category == Notification.CATEGORY_CALL
-                ) {
-                    replaceOriginal(active)
-                }
-            }
+        reconcileCurrentCalls()
         // A listener connection is system-originated; all optional restoration
         // still goes through the coordinator and remains preference-gated.
         KeepAliveCoordinator.restoreIfEnabled(this)
@@ -213,6 +221,7 @@ class WeChatListenerService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         listenerConnected.set(false)
+        if (liveInstance === this) liveInstance = null
         // Missed updates make every captured snapshot untrustworthy.
         ownRemovals.clear()
         ManualConversationLearning.cancelPending()
@@ -222,6 +231,7 @@ class WeChatListenerService : NotificationListenerService() {
 
     override fun onDestroy() {
         listenerConnected.set(false)
+        if (liveInstance === this) liveInstance = null
         super.onDestroy()
     }
 

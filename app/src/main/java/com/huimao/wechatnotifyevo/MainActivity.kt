@@ -35,6 +35,9 @@ class MainActivity : ComponentActivity() {
         NotificationFactory.ensureChannels(this)
         ConversationShortcuts.pruneOrphans(this)
         KeepAliveCoordinator.restoreIfEnabled(this)
+        // Opening the app is an explicit diagnostic/retry trigger for any active
+        // WeChat call already present before the listener process reconnected.
+        WeChatListenerService.reconcileActiveCalls()
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
         setContent { WeChatNotifyEvoTheme { AppContent() } }
