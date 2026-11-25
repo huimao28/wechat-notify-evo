@@ -83,11 +83,11 @@ object WeChatCallNotificationBridge {
                 Notification.CallStyle.forIncomingCall(person(source, title), decline, answer)
             }
             WeChatCallPhase.ONGOING -> {
-                if (hangUp == null) {
-                    Log.i(TAG, "Ongoing call detected but hang-up PendingIntent is absent; original left untouched")
-                    return false
-                }
-                Notification.CallStyle.forOngoingCall(person(source, title), hangUp)
+                val endOrDismiss = hangUp ?: proxyIntent(
+                    context, sbn, WeChatCallProxyReceiver.ACTION_DISMISS_MIRROR, null
+                )
+                Log.i(TAG, "Ongoing CallStyle control realHangUp=${hangUp != null}")
+                Notification.CallStyle.forOngoingCall(person(source, title), endOrDismiss)
             }
         }
 

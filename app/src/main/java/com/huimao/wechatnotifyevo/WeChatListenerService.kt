@@ -192,6 +192,14 @@ class WeChatListenerService : NotificationListenerService() {
         ConversationShortcuts.removeAll(this, staleUsers)
         ConversationShortcuts.pruneOrphans(this)
         reconcileNotifications(this)
+        // An app update can reconnect the listener while a WeChat call notification
+        // is already active; Android does not replay onNotificationPosted in that case.
+        // Reconcile the current snapshot so an ongoing ringing call still gets CallStyle.
+        runCatching { activeNotifications?.toList().orEmpty() }
+            .getOrDefault(emptyList())
+            .asSequence()
+            .filter { it.packageName == WECHAT_PACKAGE }
+            .forEach { WeChatCallNotificationBridge.mirrorIfSupported(this, it) }
         // A listener connection is system-originated; all optional restoration
         // still goes through the coordinator and remains preference-gated.
         KeepAliveCoordinator.restoreIfEnabled(this)
