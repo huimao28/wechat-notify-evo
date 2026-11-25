@@ -17,6 +17,7 @@ object WeChatCallNotificationBridge {
     private const val CHANNEL_NAME = "微信来电"
     private const val TAG = "WNE.CallStyle"
     private const val ID_BASE = 0x5ca11000
+    private const val DIAGNOSTIC_ID = 0x5ca11fff
     private val activeKeys = linkedSetOf<String>()
 
     fun notificationId(key: String): Int = ID_BASE xor key.hashCode()
@@ -38,7 +39,10 @@ object WeChatCallNotificationBridge {
     fun mirrorIfSupported(context: Context, sbn: StatusBarNotification): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
         return runCatching { mirrorInternal(context, sbn) }
-            .onFailure { Log.e(TAG, "CallStyle mirror failed for key=${sbn.key}", it) }
+            .onFailure { error ->
+                Log.e(TAG, "CallStyle mirror failed for key=${sbn.key}", error)
+                publishDiagnostic(context, sbn.key, error)
+            }
             .getOrDefault(false)
     }
 
@@ -123,6 +127,33 @@ object WeChatCallNotificationBridge {
         synchronized(this) { activeKeys.add(sbn.key) }
         Log.i(TAG, "Published ${decision.phase} CallStyle for key=${sbn.key}")
         return true
+    }
+
+    private fun publishDiagnostic(context: Context, key: String, error: Throwable) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val detail = buildString {
+            append(error.javaClass.simpleName)
+            append(": ")
+            append(error.message.orEmpty())
+            error.cause?.let { cause ->
+                append(" | cause=")
+                append(cause.javaClass.simpleName)
+                append(": ")
+                append(cause.message.orEmpty())
+            }
+        }.take(1000)
+        runCatching {
+            manager.notify(
+                DIAGNOSTIC_ID,
+                Notification.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_stat_wechat)
+                    .setContentTitle("CallStyle 转换失败")
+                    .setContentText(detail)
+                    .setStyle(Notification.BigTextStyle().bigText("key=$key\n$detail"))
+                    .setOnlyAlertOnce(true)
+                    .build(),
+            )
+        }
     }
 
     private fun proxyIntent(
