@@ -1,3 +1,11 @@
+# v1.1.0-beta.11
+
+- Pixel/AOSP 上微信未公开接听/拒绝操作时，保留微信自己的普通来电通知。
+- `[语音通话]`、`[视频通话]` 不再被进化成 MessagingStyle 聊天消息，也不写入本地聊天记录。
+- 只有微信同时公开真实接听与拒绝 PendingIntent 时才启用 CallStyle。
+
+---
+
 # v1.1.0-beta.10
 
 - 修复微信来电操作只有图标、没有按钮文字时无法识别的问题：现按 Android `ANSWER_CALL`、`DECLINE_CALL`、`HANGUP_CALL` 语义动作提取。

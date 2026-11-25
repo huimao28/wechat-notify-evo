@@ -227,6 +227,18 @@ class WeChatListenerService : NotificationListenerService() {
         if (WeChatCallNotificationBridge.mirrorIfSupported(this, sbn)) {
             return
         }
+        val callText = buildString {
+            append(n.extras?.getCharSequence(Notification.EXTRA_TITLE).orEmpty())
+            append(' ')
+            append(n.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
+                ?: n.extras?.getCharSequence(Notification.EXTRA_TEXT).orEmpty())
+        }
+        if (WeChatCallPolicy.looksLikeCallText(callText)) {
+            // This WeChat build exposes no public answer/decline PendingIntents.
+            // Preserve its ordinary notification and never archive it as a chat message.
+            InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.ONGOING)
+            return
+        }
         // Android Auto and phone taps must use WeChat's exact public entry.
         // If it is absent, leave the original notification untouched.
         if (n.contentIntent == null) {

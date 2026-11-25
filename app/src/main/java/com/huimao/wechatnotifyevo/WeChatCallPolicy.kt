@@ -21,8 +21,15 @@ object WeChatCallPolicy {
     private val answerWords = listOf("接听", "接受", "同意", "answer", "accept")
     private val declineWords = listOf("拒绝", "拒接", "decline", "reject")
     private val hangUpWords = listOf("挂断", "结束", "hang up", "hangup", "end call")
-    private val ringingWords = listOf("邀请你语音通话", "邀请你视频通话", "语音来电", "视频来电", "来电")
+    private val ringingWords = listOf(
+        "邀请你语音通话", "邀请你视频通话", "语音来电", "视频来电", "来电",
+        "[语音通话]", "[视频通话]",
+    )
     private val activeWords = listOf("通话中", "正在通话", "语音通话中", "视频通话中")
+
+    fun looksLikeCallText(value: String): Boolean =
+        ringingWords.any { value.contains(it, ignoreCase = true) } ||
+            activeWords.any { value.contains(it, ignoreCase = true) }
 
     fun decide(
         categoryCall: Boolean,
