@@ -209,8 +209,11 @@ class WeChatListenerService : NotificationListenerService() {
             WeChatCallNotificationBridge.cancel(this)
             return snapshot.size
         }
-        val posted = WeChatCallNotificationBridge.mirrorIfSupported(this, selected)
-        if (posted && ringing != null) replaceOriginal(ringing)
+        // Publish a CallStyle companion while preserving WeChat's authoritative
+        // notification. Some OEM SystemUI implementations do not grant a mirrored
+        // third-party CallStyle the same full-screen/lock-screen treatment, so
+        // cancelling the source notification can remove the only reliable call UI.
+        WeChatCallNotificationBridge.mirrorIfSupported(this, selected)
         return snapshot.size
     }
 
