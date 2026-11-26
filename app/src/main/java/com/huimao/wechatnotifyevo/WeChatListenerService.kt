@@ -261,12 +261,12 @@ class WeChatListenerService : NotificationListenerService() {
             InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.DISABLED)
             return
         }
-        val callTitle = n.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val callBody = (n.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
-            ?: n.extras?.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
-        val callText = "$callTitle $callBody"
-        if (n.category == Notification.CATEGORY_CALL || WeChatCallPolicy.looksLikeCallText(callText)) {
-            reconcileCurrentCalls(sbn)
+        // Let the complete CallStyle policy inspect every WeChat notification.
+        // Recent WeChat builds may expose only call extras, semantic actions or a
+        // VoIP channel, without CATEGORY_CALL or recognizable notification text.
+        // The previous outer text/category gate prevented those calls from ever
+        // reaching the bridge even though the bridge could identify them.
+        if (WeChatCallNotificationBridge.mirrorIfSupported(this, sbn)) {
             InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.ONGOING)
             return
         }
