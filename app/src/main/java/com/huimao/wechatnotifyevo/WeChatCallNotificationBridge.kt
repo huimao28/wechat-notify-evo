@@ -85,7 +85,7 @@ object WeChatCallNotificationBridge {
                 "decline=${declineExtra != null} hangup=${hangUpExtra != null} " +
                 "person=$hasCallPerson fullScreen=${source.fullScreenIntent != null} " +
                 "content=${source.contentIntent != null} titleLen=${title.length} textLen=${text.length} " +
-                "actions=${candidates.joinToString { \"${it.index}:${it.label}/${it.semanticAction}/${it.hasIntent}\" }}"
+                "actions=${candidates.joinToString { "${it.index}:${it.label}/${it.semanticAction}/${it.hasIntent}" }}"
         )
         val decision = WeChatCallPolicy.decide(
             categoryCall = categoryCall,
