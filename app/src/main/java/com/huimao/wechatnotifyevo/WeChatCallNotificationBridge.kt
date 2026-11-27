@@ -33,19 +33,31 @@ object WeChatCallNotificationBridge {
 
     @Suppress("DEPRECATION")
     fun mirrorIfSupported(context: Context, sbn: StatusBarNotification): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
-        return runCatching { mirrorInternal(context, sbn) }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            Log.w(TAG, "SKIP unsupportedSdk sdk=${Build.VERSION.SDK_INT} key=${sbn.key}")
+            return false
+        }
+        Log.w(TAG, "ENTER key=${sbn.key} id=${sbn.id} user=${sbn.userId}")
+        val result = runCatching { mirrorInternal(context, sbn) }
             .onFailure { error ->
-                Log.e(TAG, "CallStyle mirror failed for key=${sbn.key}", error)
+                Log.e(TAG, "FAIL key=${sbn.key} error=${error.javaClass.simpleName}:${error.message}", error)
                 publishDiagnostic(context, sbn.key, error)
             }
             .getOrDefault(false)
+        Log.w(TAG, "EXIT key=${sbn.key} mirrored=$result")
+        return result
     }
 
     @Suppress("DEPRECATION")
     private fun mirrorInternal(context: Context, sbn: StatusBarNotification): Boolean {
-        val source = sbn.notification ?: return false
-        val extras = source.extras ?: return false
+        val source = sbn.notification ?: run {
+            Log.w(TAG, "SKIP noNotification key=${sbn.key}")
+            return false
+        }
+        val extras = source.extras ?: run {
+            Log.w(TAG, "SKIP noExtras key=${sbn.key} category=${source.category} channel=${source.channelId}")
+            return false
+        }
         val actions = source.actions.orEmpty()
         val candidates = actions.mapIndexed { index, action ->
             CallActionCandidate(
@@ -62,17 +74,34 @@ object WeChatCallNotificationBridge {
         val answerExtra = extras.pendingIntent("android.answerIntent")
         val declineExtra = extras.pendingIntent("android.declineIntent")
         val hangUpExtra = extras.pendingIntent("android.hangUpIntent")
+        val categoryCall = source.category == Notification.CATEGORY_CALL
+        val callStyleTemplate = template.contains("CallStyle", ignoreCase = true)
+        val hasCallPerson = extras.containsKey("android.callPerson")
+        Log.w(
+            TAG,
+            "SOURCE key=${sbn.key} category=${source.category} channel=${source.channelId} " +
+                "template=${template.substringAfterLast('.')} categoryCall=$categoryCall " +
+                "callStyle=$callStyleTemplate answer=${answerExtra != null} " +
+                "decline=${declineExtra != null} hangup=${hangUpExtra != null} " +
+                "person=$hasCallPerson fullScreen=${source.fullScreenIntent != null} " +
+                "content=${source.contentIntent != null} titleLen=${title.length} textLen=${text.length} " +
+                "actions=${candidates.joinToString { \"${it.index}:${it.label}/${it.semanticAction}/${it.hasIntent}\" }}"
+        )
         val decision = WeChatCallPolicy.decide(
-            categoryCall = source.category == Notification.CATEGORY_CALL,
-            callStyleTemplate = template.contains("CallStyle", ignoreCase = true),
+            categoryCall = categoryCall,
+            callStyleTemplate = callStyleTemplate,
             hasAnswerExtra = answerExtra != null,
             hasDeclineExtra = declineExtra != null,
             hasHangUpExtra = hangUpExtra != null,
-            hasCallPerson = extras.containsKey("android.callPerson"),
+            hasCallPerson = hasCallPerson,
             channelId = source.channelId.orEmpty(),
             titleAndText = "$title $text",
             actions = candidates,
-        ) ?: return false
+        ) ?: run {
+            Log.w(TAG, "SKIP policyRejected key=${sbn.key}")
+            return false
+        }
+        Log.w(TAG, "DECISION key=${sbn.key} phase=${decision.phase} answerIndex=${decision.answerIndex} declineIndex=${decision.declineIndex} hangUpIndex=${decision.hangUpIndex}")
 
         fun actionIntent(index: Int?): PendingIntent? = index?.let { actions.getOrNull(it)?.actionIntent }
         ensureChannel(context)
@@ -114,11 +143,18 @@ object WeChatCallNotificationBridge {
         // Do not request USE_FULL_SCREEN_INTENT on behalf of WeChat. CallStyle still
         // receives system call ranking/heads-up treatment, while WeChat keeps the
         // authoritative lock-screen/full-screen entry point.
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
+        val manager = context.getSystemService(NotificationManager::class.java) ?: run {
+            Log.w(TAG, "SKIP noNotificationManager key=${sbn.key}")
+            return false
+        }
         val posted = runCatching {
-            manager.notify(CALL_NOTIFICATION_ID, builder.build())
+            val built = builder.build()
+            Log.w(TAG, "POST key=${sbn.key} id=$CALL_NOTIFICATION_ID phase=${decision.phase} channel=$CHANNEL_ID")
+            manager.notify(CALL_NOTIFICATION_ID, built)
             true
-        }.onFailure { Log.w(TAG, "Failed to publish CallStyle mirror", it) }.getOrDefault(false)
+        }.onFailure {
+            Log.e(TAG, "POST_FAIL key=${sbn.key} error=${it.javaClass.simpleName}:${it.message}", it)
+        }.getOrDefault(false)
         if (!posted) return false
         manager.cancel(DIAGNOSTIC_ID)
         Log.i(TAG, "Published ${decision.phase} CallStyle for key=${sbn.key}")
