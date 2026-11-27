@@ -3,6 +3,8 @@ package com.huimao.wechatnotifyevo
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -19,6 +21,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class WeChatListenerService : NotificationListenerService() {
     private val ownRemovals = linkedSetOf<Triple<Int, String, Long>>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val delayedCallReconcile = Runnable { reconcileCurrentCalls() }
+
+    private fun scheduleCallReconcile() {
+        mainHandler.removeCallbacks(delayedCallReconcile)
+        mainHandler.postDelayed(delayedCallReconcile, CALL_REMOVAL_GRACE_MS)
+    }
 
     private fun replaceOriginal(sbn: StatusBarNotification) {
         val marker = Triple(sbn.userId, sbn.key, sbn.postTime)
@@ -119,6 +128,7 @@ class WeChatListenerService : NotificationListenerService() {
     companion object {
         const val WECHAT_PACKAGE = "com.tencent.mm"
         private const val TAG = "WNE.UserIsolation"
+        private const val CALL_REMOVAL_GRACE_MS = 1_500L
         private val listenerConnected = AtomicBoolean(false)
         @Volatile private var liveInstance: WeChatListenerService? = null
 
@@ -245,6 +255,7 @@ class WeChatListenerService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(delayedCallReconcile)
         listenerConnected.set(false)
         if (liveInstance === this) liveInstance = null
         super.onDestroy()
@@ -267,6 +278,12 @@ class WeChatListenerService : NotificationListenerService() {
         // The previous outer text/category gate prevented those calls from ever
         // reaching the bridge even though the bridge could identify them.
         if (WeChatCallNotificationBridge.mirrorIfSupported(this, sbn)) {
+            mainHandler.removeCallbacks(delayedCallReconcile)
+            // One incoming WeChat call can publish both a low-priority "通话中"
+            // lifecycle card and a CATEGORY_CALL ringing card. Reconcile the full
+            // snapshot so the ringing card wins; otherwise the later lifecycle
+            // update incorrectly turns an unanswered call into an ongoing call.
+            reconcileCurrentCalls(sbn)
             InMemoryDiagnostics.record(sourceUserId, DiagnosticStage.ONGOING)
             return
         }
@@ -442,7 +459,10 @@ class WeChatListenerService : NotificationListenerService() {
             WeChatCallPolicy.looksLikeCallText(
                 sbn.notification.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
             )
-        if (removedWasCall) reconcileCurrentCalls()
+        // WeChat swaps its ringing and lifecycle notifications during one call.
+        // Rechecking synchronously observes a transient empty snapshot and cancels
+        // our CallStyle immediately after publishing it. Wait for the swap to settle.
+        if (removedWasCall) scheduleCallReconcile()
         // WeChat itself removed the notification (read in-app, clicked, or
         // otherwise dismissed): drop our evolved copy too.
         val conv = ConversationStore.get(sbn.id, sourceUserId) ?: return
